@@ -78,9 +78,9 @@ export default async function handler(req, res) {
     }
 
     // 네이버지도 자체에 "네이버예약"이 연동된 캠핑장인지 확인
-    // (지도 엔진과 무관하게, 네이버지도 장소 페이지를 직접 열어서 표시 여부를 감지)
+    // (지도 엔진과 무관하게, 네이버지도의 비공식 검색 API로 예약 연동 여부만 감지)
     const naverMapUrl = `https://map.naver.com/p/search/${encodeURIComponent(name)}`;
-    const naverReserveResult = await pageHasNaverReservation(naverMapUrl);
+    const naverReserveResult = await pageHasNaverReservation(name, debug);
     result.naverReservation = naverReserveResult.hasReservation ? naverMapUrl : null;
     if (debug) debugInfo.naverReservation = naverReserveResult;
 
@@ -127,33 +127,57 @@ async function pageContainsName(url, name) {
   }
 }
 
-// 네이버지도 장소 페이지를 열어서 "네이버예약" 표시가 있는지 확인
-// (네이버지도는 자바스크립트로 내용을 그리는 페이지라, 서버에서 단순 요청으로는
-//  못 읽어올 가능성이 있음 - 이 경우 hasReservation:false로 처리하고 debug로 원인 확인)
-async function pageHasNaverReservation(url) {
+// 네이버지도가 자체적으로 쓰는 (비공식) 검색 API를 통해 이 캠핑장이 네이버예약과
+// 연동되어 있는지 확인. 공식 문서화된 API가 아니라서 언제든 바뀌거나 막힐 수 있음.
+async function pageHasNaverReservation(name, debug) {
   try {
-    const pageRes = await fetch(url, {
+    const query = encodeURIComponent(name);
+    const url = `https://map.naver.com/p/api/search/allSearch?query=${query}&type=all&searchCoord=127.9784;36.5&boundary=`;
+
+    const res = await fetch(url, {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+        Referer: `https://map.naver.com/p/search/${query}`,
+        Accept: 'application/json, text/plain, */*',
       },
     });
-    if (!pageRes.ok) {
-      return { hasReservation: false, checked: false, reason: `페이지 응답 실패 (status ${pageRes.status})` };
+
+    if (!res.ok) {
+      return { hasReservation: false, checked: false, reason: `allSearch API 응답 실패 (status ${res.status})` };
     }
 
-    const html = await pageRes.text();
-    const hasReservation = html.includes('네이버예약') || html.includes('N예약') || /"bookingBusinessId"\s*:\s*"[^"]+"/i.test(html);
+    const data = await res.json();
+    const raw = JSON.stringify(data);
+
+    // 장소 결과 목록을 최대한 유연하게 찾음 (응답 구조가 바뀔 수 있어서 여러 경로 시도)
+    const places =
+      data?.result?.place?.list ||
+      data?.result?.place?.items ||
+      data?.place?.list ||
+      [];
+
+    // 이름이 일치하는 장소를 찾고, 그 장소 데이터 안에 예약 관련 필드가 있는지 확인
+    const normalize = (s) => (s || '').replace(/<[^>]*>/g, '').replace(/\s+/g, '').toLowerCase();
+    const target = normalize(name);
+    const matched = places.find((p) => normalize(p.name || p.title).includes(target)) || places[0];
+
+    const matchedRaw = matched ? JSON.stringify(matched) : '';
+    const hasReservation =
+      /bookingBusinessId/i.test(matchedRaw) ||
+      /"booking"\s*:\s*(true|\{)/i.test(matchedRaw) ||
+      (matched && matched.visitorReservationUrl) ||
+      (matched && matched.reservation);
 
     return {
-      hasReservation,
+      hasReservation: !!hasReservation,
       checked: true,
-      htmlLength: html.length,
-      reason: hasReservation ? '네이버예약 표시 확인됨' : '네이버예약 표시 못 찾음 (해당 없거나 JS 렌더링 페이지라 못 읽었을 수 있음)',
+      placesFound: places.length,
+      matchedName: matched ? matched.name || matched.title : null,
+      reason: hasReservation ? '예약 관련 필드 확인됨' : '예약 관련 필드 못 찾음',
+      ...(debug ? { rawSample: raw.slice(0, 4000), matchedRaw: matchedRaw.slice(0, 2000) } : {}),
     };
   } catch (e) {
-    return { hasReservation: false, checked: false, reason: `페이지 요청 자체 실패: ${e.message}` };
+    return { hasReservation: false, checked: false, reason: `요청 자체 실패: ${e.message}` };
   }
 }
