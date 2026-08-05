@@ -1,511 +1,557 @@
-<!--# 4PsjLGVG0nrnktGkDpSGsNqGK6sF0FLGVnq47Q6d-->
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3c.org/TR/1999/REC-html401-19991224/loose.dtd">
-<html>
+<!DOCTYPE html>
+<html lang="ko">
 <head>
-<meta name="description" content="Zscaler makes the internet safe for businesses by protecting their employees from malware, viruses, and other security threats.">
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Internet Security by Zscaler</title>
-<script language="JavaScript">var defLang = 'ko_KR'</script>
-<!--<img alt="Zscaler" src="https://login.zscaler.net/img_logo_new1.png">-->
-<style type="text/css">
-body {
-background-color:#e3e3e3;
-font-family:Arial, sans-serif;
-font-size:12px;
-color:#4B4F54;
-}
-a {
-cursor:pointer;
-text-decoration:none;
-color:#009dd0;
-}
-table {
-margin-top:10px;
-}
-td table {
-margin-top:0;
-text-align:center;
-}
-img {
-max-height:75px;
-max-width:430px;
-}
-.pg {
-position:absolute;
-top:0;
-bottom:0;
-left:0;
-right:0;
-overflow-x:hidden;
-white-space:nowrap;
-}
-.pg:before {
-content:"";
-display:inline-block;
-height:100%;
-vertical-align:middle;
-}
-.pg_cont {
-display:inline-block;
-vertical-align:middle;
-width:100%;
-position:relative;
-}
-.a_i {
-width:19px;
-height:19px;
-margin-right:10px;
-background-size: 19px 19px;
-display:inline-block;
-}
-.m_tbl {
-width:100%;
-max-width:758px;
-background:#e3e3e3;
-min-width:600px;
-}
-.pg.red .eu_h {
-color:#fd4239;
-border-top:3px solid #fd4239;
-}
-.pg.red .eu_h .a_i {
-background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABMAAAATCAYAAAByUDbMAAABoElEQVR4nK3Uz2vIYRzA8dcMzWGJdjSZKZLCDphfB7XVHBAXF2XFpJxd+BvUbtY20m4KxVExtbWkUYQLByU3OVhpy8zh+Tzr2dN3t30un1/P834+z/N8noc1lBZYPNVbx3twDQPYFuN+4RUm8ARL5YTWFzPWVZA2jGIWQ+jMC2ILzuERZrCjrmB9YW/CcxwLfwFTAf6J3TiPzTiMNziJz02wkQL0DpfwsVp8OCAb0IFnOIA5LG/zeEwWgN4GUBeeBihLN25mJ8NuhF7CIOYbQJPYHv59fAv7OlpL2OnQH2IbpexsAF3BePgdOFTC2kO/bQC9LED3AvTPymPoYuUFkHqprqizAF0NECwWY9vKynJi1yqg8QoEBwv7ewmbCt2HIw2goQrUgv6wF6QmXoY9KMqdLkBjDSDSueU3+Bi/S9gE3oedY2PS+6xBF3En7Hnczol8AX9xAa+xNWJHpXOajXwPzuBsAR7E1xoGX3BC6vJu7MVdzfIHl/GwDNa/xifsxy1xQ5XMSS2ypwax+n+Wc/ukr2YjfkhNXT81pP9sTeU/6YpejkX0NUMAAAAASUVORK5CYII=');
-}
-.pg.red .eu_h, .pg.red .eu_co, .pg.red .hr {
-border-left:3px solid #fd4239;
-border-right:3px solid #fd4239;
-}
-.pg.red .fo {
-border-bottom-color:#fd4239;
-}
-.pg.red .eu_co.st{
-border:0;
-}
-.pg.yl .eu_h .a_i {
-background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAFgUlEQVR4nO2dOWxcVRSGP0+wWWKSiC1WMAV7SAI0bBLBLBI0bEUSyiSAFCOgYLMpEBA3JCEUCISQEBIIKtIgpaCho6KhAglkCQlRRBAhKBIQW4Di5iHH+M28c+85955h7leO5y6eb972v/PuQKVSqQwNY5+8V3oKYi4C3gXuaPn7x8Bu4Eim+agxsxN6pSch5GrgM9plANx58j0bs8xImWESsho4BJzf4b1TwAfAGaYzMmCYhDyH7Ft/DTBvNBczhkXINPBkRLs54ALluZgyLEIWiNv9TAIvKM/FlGEQsoVw1hTLLHCFzlTsGQYh+0mb52nAS0pzMce7kNuBuxX62QbcpNCPOZ6F9ICXFfs7CIwp9meCZyE7gOsU+9sK3KfYnwlehUxgs9/fTzimuMWrkEeASwz63Qg8ZNCvGh6FrMX22mGBEMO4xKOQZ4FzDfufAp4y7D8Jb0KmgScyjDOP00jFm5AF4MwM47iNVDwJSY1IpLiMVDwJSY1IpLiMVLwIuQ2diESKu0jFgxDtiESKq0jFg5AdwPUFx3cVqZQWYhWRSHETqZQWYhWRSHETqZQUshZ4vuD4y3ERqZQUMg+cV3D85biIVEoJuZC4KhJrikcqpQ5kMRHJMeCosM16QkzSlSZSeVw4jholhGwGHhS2eR14Bvhd2O504BVkH/As8BqwKBxLhRK7LGlEcoI4GQC/AU8DfwvaFI1Ucgu5Fbgnol2MjIYTyK/Ei0UqOYWMEWIKKauA8YRxY+P8IpFKTiEpEclZCePGXltsBe5NGDeKXEJSI5KUm1YpMg+Q+cQnl5BZ4NKE9ikfakrb7JFKDiFrSL9dWkoIZI5UcgjRiEhK7bIgc6RiLWQDOv9MyS0EMkYq1kK0qkhKbiGQsUrFUshm9A6IJU57l5OlSsVSiGYVSektBDJFKlZCYiOSNkofQxrMIxULIWPoV5F4EQLGkYqFkO3ADcp9ethlNZhGKtpCJoB9yn2Cry0EDCMVbSGpEUkbKVuIxVW2WaSiKUQjImnD2xYCRpGKphDLKhJPx5AGk0hFS4hWRNKGxy0EDCIVLSHWD9p4FaIeqWgI2YT9PQOPu6yGWeByrc40hOR40MbrFgLKkUrqBzlDnvvO3k57l7MdpUglRUhsFUkMnreQBpVIJUWIRUTShudjSINKpBIrJPeDNlPEXeNcSZ7HrBuSI5XYxnuAy1IGFjIBfEVYk/f7jm2mgbvMZrQyTaTyVmwHMQsprwG+xtezHZ74jvBl/VnaMHYh5TmqjH4kRSpSIRsI1eSV/kRHKlIhe8l7kBxWoiMViZBNwMMxg4woUZGKRMg+4ftHnahIpetp7wzlVzv4CTgMHO/4/kngfmCd1YQ60EQqn3Zt0EWIRRWJlL+Am4Evhe22AJ/rT0fEQcIXutNjdV12QduAG1NmpMA3yGUAfAF8qzsVMaJIZZCQcWyqSKT8UaitFp0jlUFCckck/1c6V6n0E3I28KLKdCrQsUqln5A5uv28UKUbnSKVNiE1IrFhYKTSJmQv+W7sjBIDI5WVhFxFjUgs6RuprCQk93Kto0bfSGX5B38L5SOSUaC1SmWpkJxVJJWWKpWlQjxEJG2sJ24BmomTbT2yYqTSXM6P42O51jbWEQoHXqX7verVhHW2JCvK5eYA8BHwZ/NCI2QPivWpRuwm72L9OfhPlUqPGpGU5pRIpUeNSEpzSqTSo0YkHvj36bMeNSLxwCSwE+oVuScegCrEExdDFeKJVVCFeGIRqhBPHIYgRFw2X1HnGPA2BCEufllmxNkF/ABByCGClF9LzmhE+YVw/fFh80JzDHkHuBZ4k1BDW7HlR+ANwmf+/tI/LK2mWwQeBR4DzqHmW1YcJXzpJT+hUalUKpXKQP4B3AaeT/TFo6kAAAAASUVORK5CYII=');
-}
-.pg.yl .eu_h {
-color:#c2a200;
-border-top:3px solid #c2a200;
-}
-.pg.yl .eu_h, .pg.yl .eu_co, .pg.yl .hr {
-border-left:3px solid #c2a200;
-border-right:3px solid #c2a200;
-}
-.pg.yl .fo {
-border-bottom-color:#c2a200;
-}
-.pg.yl .eu_co.st{
-border:0;
-}
-.pg.or .eu_h {
-color:#e39e00;
-border-top:3px solid #e39e00;
-}
-.pg.or .eu_h .a_i {
-background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABMAAAASCAYAAAC5DOVpAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyhpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuNi1jMTExIDc5LjE1ODMyNSwgMjAxNS8wOS8xMC0wMToxMDoyMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENDIDIwMTUgKE1hY2ludG9zaCkiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6QjIzMTRDODNCQ0ExMTFFNUFBNTY5RTA4NDFEMEU0QTAiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6QjIzMTRDODRCQ0ExMTFFNUFBNTY5RTA4NDFEMEU0QTAiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDpCMjMxNEM4MUJDQTExMUU1QUE1NjlFMDg0MUQwRTRBMCIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDpCMjMxNEM4MkJDQTExMUU1QUE1NjlFMDg0MUQwRTRBMCIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/Poc8rmgAAAI2SURBVHjadJRdSFVBEMfvvRiGeP1IfdIKM3qQ/KQUtISCIBX8LEMFwcIPEBSEqPBREXwRQbIQS30wDUvDJEQQKkKI1C6hSQiBXB8Cw5CelPT2G5iF43Jc+DFzZmb/e87u7PGGQiGP29ga9nZgzsDbpPrQLM8X8OvgHHQR+27P8bqJMXFE3UYm7Vu5Ckw/lJBbduZ8LkJtmNtwzxaSQWwKI0zaOZ8lJM898I5JB57jxxNIpr7MGQyzis5DOOyoeAamCYrhBzyGGTAL3YQ3x4mZDcxF6CL2C5yAn1AAN6BeF/Q4RF33rEqtvNF9KIRYPjkFTuLnQDR0al0Wi54+cpoEIvHnIN9lb3phV2o1PwSnrLpKORgjJp9zCZZAjltWK3IUV2iPmQ3fhDHdpmaIkm3wIdSuQtdQv4z9oEcv/hq8JD6tn/YHGuAW/Cb+AHsWFqTOG3zu+YTTR+KVnuCqFPDsx/fjXwGJJWifrRCXE34K2Tx/1XkBOYANI6TjGUSSTCf+F9+vbzgoQlrTqu3zzTFvUsS2rc0cgF/yuQjGYwMquKFv0I1JhXarsbdFLEBBmOO67GGuQwy8hjTTRtTVYh/J3aRu1HqJoIhNkPhn3b917bUWuKvhYrV55Ftdrth70xrl0tUUTVh3tUZbwIxFavKtmmRMqfSfEZPjfQgR8BkOQYSu6pwXcsUgRXM92mtxkAnTLDJ+5H+G6B2M7Eu23tN5GKXwI7kY7bFqSJRy+bvoKQdl/n8BBgA1+diozP47HQAAAABJRU5ErkJggg==');
-}
-.pg.or .eu_h, .pg.or .eu_co, .pg.or .hr {
-border-left:3px solid #e39e00;
-border-right:3px solid #e39e00;
-}
-.pg.or .fo {
-border-bottom-color:#e39e00;
-}
-.pg.or .eu_co.st{
-border:0;
-}
-.m_tbl table td {
-padding:0 20px 16px 20px;
-text-align:left;
-background-color:white;
-}
-.m_tbl table td.bh {
-text-align:center;
-background-color:#e3e3e3;
-z-index:100;
-}
-.m_tbl table td.eu_h {
-padding-top: 20px;
-}
-.eu_h {
-vertical-align:middle;
-font-weight:normal;
-white-space:normal;
-font-size: 24px;
-background-color:white;
-border-left:3px solid;
-border-right:3px solid;
-border-top-left-radius: 10px;
-border-top-right-radius: 10px;
-}
-.pg .eu_h.sm {
-font-size:16px;
-color:#929496;
-border-top-left-radius:0;
-border-top-right-radius:0;
-border-top:0;
-padding-top:0;
-}
-hr {
-margin:0;
-border-top:0.5px solid #cfd0d1;
-}
-.eu_co {
-font-size:16px;
-color:#2a2c30;
-border-left:3px solid;
-border-right:3px solid;
-white-space: normal;
-word-wrap: break-word;
-}
-.eu_co.rsn{
-color:#000000;
-}
-.eu_l {
-display:inline;
-padding-left:5px;
-}
-.bh {
-min-height:35px;
-display:block;
-max-height:75px;
-color:#0076A9;
-font-size:16px;
-overflow:hidden;
-padding-bottom:15px;
-padding-top:5px;
-background-color:#e3e3e3;
-text-align:center;
-max-width:758px;
-text-overflow: ellipsis;
-}
-.btn {
-background:#009dd0;
-color:#FFFFFF;
-border-radius:5px;
-border:2px solid #009dd0;
-cursor:pointer;
-display:inline-block;
-height:30px;
-margin:10px 0 15px;
-font-size:18px;
-line-height:26px;
-width:auto;
-padding:0 20px;
-}
-.btn:focus {
-outline:none;
-}
-.btn:hover {
-background:#fff;
-color:#0076A9;
-}
-.eu_co.fo {
-height:32px;
-color:#696A6D;
-background-color:#f3f3f3;
-line-height:32px;
-font-size:11px;
-padding-bottom:0px;
-border-bottom:3px solid;
-border-bottom-left-radius:10px;
-border-bottom-right-radius:10px;
-}
-.eu_co.fo.pb35 {
-background-color: white;
-color: #2a2c30;
-font-size: 16px;
-padding-bottom: 20px;
-}
-.eu_co.st {
-font-size: 12px;
-padding: 10px 0;
-line-height: 20px;
-position: relative;
-color: #939393;
-background:#e3e3e3;
-border:0;
-text-align: center;
-}
-.s_img {
-vertical-align:top;
-padding-right:5px;
-background:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADoAAAAMCAYAAAAzmK6YAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyhpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuNi1jMTExIDc5LjE1ODMyNSwgMjAxNS8wOS8xMC0wMToxMDoyMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENDIDIwMTUgKE1hY2ludG9zaCkiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6MDg4M0FBNkZBODFFMTFFNUI3RkJGMDcxMjM1MjFGQjUiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6MDg4M0FBNzBBODFFMTFFNUI3RkJGMDcxMjM1MjFGQjUiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDowODgzQUE2REE4MUUxMUU1QjdGQkYwNzEyMzUyMUZCNSIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDowODgzQUE2RUE4MUUxMUU1QjdGQkYwNzEyMzUyMUZCNSIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/PkDA4BkAAANHSURBVHja1JZpSBVhFIaveevaQpGRqaVkC5UWSiutkCVtRlaWtlhRli3+CPtREBFFBUULoVBhEYVYtEALEgZmC4ZEJBFEciuznVKIdjW098BzZbqo+c/64HGcmW++Oed873nnBjQ0NLhs5OTkuJoY8WK5GCn6CI94K26Io+K+6x8ZmZmZLd53+51bMtGiXswXax33noqzokh8FJ/aOLcBxPm8NZPd7GZnHXaLZaK735wf4oJ4IdqLUHGzjZO0OArEF9T21xGQnZ3tIZHEZuZY1b6LR2IvCY8WE0WEqBGPxUVR4nhukujL83X2LlEh7ok5Ik68F1doB1+rjBNV4hL3O4kkMYh5l0UHUSnyRJoYIyazKVcl48Zd1ibavTBLNIN+a258FltYdIVYSUXtehBS9zB3s9jH/ydEMhKPINGD9lIxTbwRw8QzMZwiWqtUix5Ici7rDCGxaIp5TJwWS0VvnrV26kkxRhBjHgUvaac/i1pI8rWYKo6ICSQ3Wwyl8hZglBWO+Sb/GP5fQ8Db2dXzwsv7TEFTRCpKyCTJdRRlFV5gwW4TY8USUS66ivHiJ3MtyR0ikneFiwSSNFmnmCJsR58gC/9RzQNlrewb25l+YrE4w7VNYr84LDaKWBKwAnwT18QukSu6NRGHyXuro3i2sycpboiw2OfRVr9YwzwkG3VlScaHfGZU3kyiWY4kB4uZ9GYves5c+DbHGSRZKx6KQF6WhtxPOdY1OfanT5NZz86LHXNCkHgRMaRwXihe4Se3xED6Pp3WiCCG6axT7HTdA2IWwfnGHXogCjksFB39CpGA1Hyjgl72Yhi25nURzK6Y7K26D8QGkkliV0OR8mp2MRkzCsboInnWVPOSXrzLMYZet4KtRyFxKNLb6Lr2g0HOlMpCoVy3Pvog8lmgpVGJQZmbfuWlBbhxIK7ppo/MODJwTTOP42KPWECvheHqO9m9c2IUPV5KL8dT0EQ+hbmo6R1ml8/nr1SyTf8jUWw4HL2HYBCFrUjSi6zK/L7NboLzjXaYh4vggqh4rWOOfcu7UOAGx/VQnvX9QAni6FvPw5rVSqxOeQQwp0bn9U0l6p9ELK7lwXnjcLw6ql7AZ6nqf/gJ+FuAAQDyhegdUpDo7QAAAABJRU5ErkJggg==") no-repeat;
-width:55px;
-height:17px;
-position:relative;
-top:3px;
-display:inline-block;
-}
-.f_btn {
-display:inline-block;
-}
-.uq_cd {
-position:absolute;
-bottom:54px;
-right:25px;
-font-size:10px;
-color:#696A6D;
-}
-.s_l td {
-font-size: 13px;
-color: #77797c;
-text-align:right;
-}
-.s_l a {
-padding:4px;
-cursor:pointer;
-font-size:13px;
-}
-.s_l .sprt {
-margin-left: 6px;
-margin-right: 4px;
-padding-right: 0;
-cursor: default;
-height: 14px;
-border-left: 1px #cfd0d1 solid;
-}
-.langSelector{
-width:200px;
-}
-.langSelector td{
-text-align:right;
-}
-.logo_container{
-position:relative;
-max-width:758px;
-margin:0px auto;
-}
-.err_cd {
-font-size:16px;
-color:#2a2c30;
-text-align: left;
-background-color:white;
-padding-bottom:16px;
-}
-@media only screen and (max-width:700px) {
-td.bh{
-padding-bottom:35px;
-}
-.eu_h{
-font-size:18px;
-}
-.eu_h,.eu_co,.st{
-word-wrap:break-word;
-white-space:normal;
-}
-.sm{
-font-size:14px;
-}
-.fo{
-padding:2px 0;
-height:20px;
-line-height:20px;
-}
-.m_tbl {
-min-width: 300px;
-width: 95%;
-position:relative;
-left:-3px;
-}
-.uq_cd {
-bottom: 77px;
-}
-.a_i {
-position: relative;
-top: 4px;
-}
-.s_l {
-position: absolute;
-top:85px;
-width:100%;
-z-index:100;
-}
-.s_l a {
-padding: 0;
-}
-.m_tbl table .s_l td {
-text-align: center;
-}
-.pg{
-overflow-y:auto;
-}
-.langSelector{
-width:100%;
-}
-.langSelector td{
-text-align:center;
-}
-}
-</style>
-<!-- This is for multilangual EUNs -->
-<script language="JavaScript">
-<!--
-function changeLanguage(id) {
-if (document.getElementById("en_US")) document.getElementById("btn_en_US").style.color="#009dd0";
-if (document.getElementById("ko_KR")) document.getElementById("btn_ko_KR").style.color="#009dd0";if (document.getElementById("btn_"+id)) {document.getElementById("btn_"+id).style.color="#77797c"; }
-if (document.getElementById(id)) {
-if (document.getElementById("en_US")) document.getElementById("en_US").style.display="none";
-if (document.getElementById("ko_KR")) document.getElementById("ko_KR").style.display="none";document.getElementById(id).style.display="";
-}
-if (typeof sanitizeHTML !== "undefined") {
-sanitizeHTML(id);
-}
-}
-function showLangSelector() {
-var langNode = document.getElementById("langSelector");
-var pageNode = document.getElementById("logo_container");
-if(!!langNode){
-if (langNode.parentNode) {
-langNode = langNode.parentNode.removeChild(langNode);
-var logoNode = document.getElementById("logo");
-pageNode.insertBefore(langNode, logoNode);
-}
-langNode.style.display="";
-changeLanguage(defLang);
-}
-}
-function init() {
-if(typeof initForNewScreens !== "undefined"){
-initForNewScreens(defLang);
-}
-showLangSelector();
-}
-if (typeof(defLang) == "string") {
-if (window.addEventListener)
-addEventListener("load",init,false);
-else if (window.attachEvent)
-attachEvent("onload",init)
-}
-//-->
-</script>
-<!-- Language selector (top of the screen), invisible by default
-(JS, if enabled, will make it visible) -->
-<table style="position: absolute; right: 0px; bottom: 0px;" id="langSelector" class="langSelector s_l" width="50%" border="0" align="center" cellpadding="0" cellspacing="0">
-<tr>
-<td style="font-size:12px; padding-bottom:4px">
-<a id='btn_en_US' onclick="changeLanguage('en_US')">English</a><span class="sprt"></span>
-<a id='btn_ko_KR' onclick="changeLanguage('ko_KR')">Korean</a></td>
-</tr>
-</table>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>내 전용 캠핑 지도</title>
+    <!-- 카카오맵 SDK (clusterer 라이브러리 추가: 마커 많을 때 뭉쳐서 표시) -->
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=0a2a1dd398016b31a421f8571610cb5a&libraries=services,clusterer"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body, html { margin:0; padding:0; height:100%; width:100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        #map { width:100%; height:100%; background: #e9ecef; }
 
+        .search-wrapper {
+            position: fixed; top: 16px; left: 16px; right: 16px; z-index: 100;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .search-container {
+            display: flex; gap: 8px; background: white; padding: 6px;
+            border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .search-input {
+            flex: 1; border: none; outline: none; padding: 10px 12px;
+            font-size: 15px; border-radius: 8px; background: #f8f9fa;
+        }
+        .search-btn {
+            background: #2b8a3e; color: white; border: none;
+            padding: 0 16px; border-radius: 8px; font-weight: bold;
+            font-size: 14px; cursor: pointer; white-space: nowrap;
+        }
+        .search-btn:active { opacity: 0.85; }
+        .search-btn:disabled { background: #adb5bd; }
+
+        #search-results {
+            background: white; border-radius: 12px; max-height: 250px;
+            overflow-y: auto; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            display: none; padding: 0; margin: 0; list-style: none;
+        }
+        #search-results li {
+            padding: 12px 16px; border-bottom: 1px solid #f1f3f5;
+            cursor: pointer; transition: background 0.15s;
+        }
+        #search-results li:last-child { border-bottom: none; }
+        #search-results li:active { background: #e7f5ff; }
+        .result-title { font-weight: bold; font-size: 15px; color: #111; margin-bottom: 2px; }
+        .result-sub { font-size: 12px; color: #666; display: flex; gap: 8px; }
+        .result-category { color: #2b8a3e; font-weight: 600; }
+
+        #legend {
+            position: fixed; left: 16px; bottom: 30px; z-index: 90;
+            background: white; border-radius: 10px; padding: 8px 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-size: 11px; color: #333;
+            display: flex; flex-direction: column; gap: 4px;
+        }
+        #legend .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
+
+        #status-badge {
+            position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+            z-index: 90; background: rgba(0,0,0,0.7); color: white;
+            padding: 6px 14px; border-radius: 20px; font-size: 12px;
+            display: none; margin-top: 60px;
+        }
+
+        .gps-btn {
+            position: fixed; right: 16px; bottom: 30px; z-index: 100;
+            width: 48px; height: 48px; border-radius: 50%;
+            background: white; border: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; transition: transform 0.1s, bottom 0.3s ease-in-out;
+        }
+        .gps-btn:active { transform: scale(0.95); }
+        .gps-btn.shifted { bottom: 260px; }
+        .gps-icon { width: 22px; height: 22px; fill: #333; }
+
+        #bottom-sheet {
+            position: fixed; bottom: -400px; left: 0; right: 0;
+            background: white; padding: 20px; border-radius: 20px 20px 0 0;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.15); z-index: 1000;
+            transition: bottom 0.3s ease-in-out;
+        }
+        #bottom-sheet.active { bottom: 0; }
+        .sheet-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+        .camp-title { margin: 0; font-size: 18px; font-weight: bold; color: #111; }
+        .camp-category { font-size: 12px; color: #2b8a3e; font-weight: 600; margin-bottom: 4px; }
+        .camp-address { margin: 0 0 8px 0; color: #666; font-size: 13px; line-height: 1.4; }
+        .camp-tel { margin: 0 0 16px 0; color: #666; font-size: 13px; }
+        .close-btn { background: none; border: none; font-size: 20px; color: #aaa; cursor: pointer; padding: 0; }
+
+        .btn-row { display: flex; flex-direction: column; gap: 8px; }
+        .reserve-btn {
+            display: flex; justify-content: center; align-items: center;
+            width: 100%; height: 48px; border-radius: 12px;
+            color: white; font-size: 15px; font-weight: bold;
+            text-decoration: none; border: none; transition: opacity 0.2s;
+        }
+        .reserve-btn:active { opacity: 0.8; }
+        .reserve-btn.primary { background: #2b8a3e; }
+        .reserve-btn.secondary { background: #495057; height: 42px; font-size: 14px; }
+    </style>
 </head>
 <body>
-<!--[if lte IE 7]>
-<style type="text/css">
-.a_i {
-display: none;
-margin-right: 0;
-width: 0;
-}
-.m_tbl {
-width: 100%;
-}
-.pg {
-text-align: center;
-width:100%;
-}
-.pg_cont {
-width: 600px;
-}
-.m_tbl table td.eu_co.st {
-background-color: #e3e3e3;
-}
-.logo_container{
-width:600px;
-}
-</style>
-<![endif]-->
-<div class="pg red">
-<div class="pg_cont">
-<div id="logo_container" class="logo_container">
-<table id="logo" width="50%" cellspacing="0" cellpadding="0" border="0" align="center">
-<tbody>
-<tr align="center">
-<td align="center" class="bh">
-<img src="https://login.zscaler.net:443/__zsig/PZVPjqJsQtc0r" /></td></tr>
-</tbody></table></div>
-<table class="m_tbl" cellpadding="0" cellspacing="0" align="center">
-<tbody><tr>
-<td height="100" valign="top" style="position:relative;">
-<div class="uq_cd">D22</div>
-<!--locale en_US-->
-<table id="en_US" width="100%" border="0" cellspacing="0" cellpadding="0">
-<tbody><tr><td class="eu_h">
-<i class="a_i"></i>
-Sorry, you don't have permission to visit this site.
-</td></tr>
-<tr><td class="hr"><hr></td></tr>
-<tr><td class="eu_co rsn">
-Not allowed to browse <B>FileHost</B> category
-</td></tr>
-<tr><td class="eu_co">
-You tried to visit:<div class="eu_l"><a href="https://raw.githubusercontent.com/lazy2pro/my-camping-map/675c599af35348d70eae131757a285df2907e718/index.html">https://raw.githubusercontent.com/lazy2pro/my-camping-map/675c599af35348d70eae131757a285df...</a></div>
-</td></tr><tr>
-<td class="hr"><hr></td>
-</tr>
-<tr><td class="eu_co">
-<a href="http://sitereview.zscaler.com?url=https%3a%2f%2fraw%2egithubusercontent%2ecom%2flazy2pro%2fmy%2dcamping%2dmap%2f675c599af35348d70eae131757a285df2907e718%2findex%2ehtml&referer=https%3a%2f%2fgithub%2ecom%2flazy2pro%2fmy%2dcamping%2dmap%2fblob%2f675c599af35348d70eae131757a285df2907e718%2findex%2ehtml&reason=Not+allowed+to+browse+FileHost+category&reasoncode=CATEGORY_DENIED&timebound=1&action=deny&kind=&rule=4PsjLGVG0nrnktGkDpSGsNqGK6sF0FLGVnq47Q6&cat=FileHost&user=10102491@olympus.com&locid=04126324&lang=ko_KR&zsq=4PsjLGVG0nrnktGkDpSGsNqGK6sF0FLGVnq47Q6zsq"><!DOCTYPE html>
-<html>
-<body>
-<h3 style="color:red;">We're sorry! It lookslike the site you're trying to visit got blocked by our web filter to protect you. </h3>
-<div class="footer">
 
-<a>If you think this site shouldn't be blocked or need an exceptional access,</a><a href="https://olympusprod.service-now.com/quest?id=olympus_sc_cat_item&sys_id=1269c758971166989f007a500153af1e&sysparm_category=a00da3d11b7b4c50072097539b4bcb56" style="color:blue">Click here</a></div>
-
-</body>
-</html></a>
-</td></tr>
-<tr><td class="eu_co fo">
-Need help? Contact our support team at <a href="mailto:Quest@olympus.com">Quest@olympus.com</a>
-</td></tr>
-<tr><td class="eu_co st">
-<span class="s_img"></span>
-Your organization has selected Zscaler to protect you from internet threats.
-</td></tr>
-</tbody></table>
-<!--/locale en_US-->
-<!--locale ko_KR-->
-<table id="ko_KR" style="display:none" width="100%" border="0" cellspacing="0" cellpadding="0">
-<tbody><tr><td class="eu_h">
-<i class="a_i"></i>
-죄송합니다. 이 사이트를 방문할 권한이 없습니다.
-</td></tr>
-<tr><td class="hr"><hr></td></tr>
-<tr><td class="eu_co rsn">
-<B>파일 호스트</B> 카테고리를 탐색 할 수 없음
-</td></tr>
-<tr><td class="eu_co">
-다음에 방문을 시도했습니다:<div class="eu_l"><a href="https://raw.githubusercontent.com/lazy2pro/my-camping-map/675c599af35348d70eae131757a285df2907e718/index.html">https://raw.githubusercontent.com/lazy2pro/my-camping-map/675c599af35348d70eae131757a285df...</a></div>
-</td></tr><tr>
-<td class="hr"><hr></td>
-</tr>
-<tr><td class="eu_co">
-<a href="http://sitereview.zscaler.com?url=https%3a%2f%2fraw%2egithubusercontent%2ecom%2flazy2pro%2fmy%2dcamping%2dmap%2f675c599af35348d70eae131757a285df2907e718%2findex%2ehtml&referer=https%3a%2f%2fgithub%2ecom%2flazy2pro%2fmy%2dcamping%2dmap%2fblob%2f675c599af35348d70eae131757a285df2907e718%2findex%2ehtml&reason=Not+allowed+to+browse+FileHost+category&reasoncode=CATEGORY_DENIED&timebound=1&action=deny&kind=&rule=4PsjLGVG0nrnktGkDpSGsNqGK6sF0FLGVnq47Q6&cat=FileHost&user=10102491@olympus.com&locid=04126324&lang=ko_KR&zsq=4PsjLGVG0nrnktGkDpSGsNqGK6sF0FLGVnq47Q6zsq"><!DOCTYPE html>
-<html>
-<body>
-<h3 style="color:red;">We're sorry! It lookslike the site you're trying to visit got blocked by our web filter to protect you. </h3>
-<div class="footer">
-
-<a>If you think this site shouldn't be blocked or need an exceptional access,</a><a href="https://olympusprod.service-now.com/quest?id=olympus_sc_cat_item&sys_id=1269c758971166989f007a500153af1e&sysparm_category=a00da3d11b7b4c50072097539b4bcb56" style="color:blue">Click here</a></div>
-
-</body>
-</html></a>
-</td></tr>
-<tr><td class="eu_co fo">
-도움이 필요하십니까? 다음으로 지원 팀에 문의하십시오: <a href="mailto:Quest@olympus.com">Quest@olympus.com</a>
-</td></tr>
-<tr><td class="eu_co st">
-<span class="s_img"></span>
-귀하의 조직은 인터넷 위협으로부터 사용자를 보호하기 위해 Zscaler를 선택했습니다.
-</td></tr>
-</tbody></table>
-<!--/locale ko_KR-->
-</td></tr>
-</tbody></table>
+<div class="search-wrapper">
+    <div class="search-container">
+        <input type="text" id="search-keyword" class="search-input" placeholder="캠핑장 이름 검색 (예: 계방산)" onkeyup="if(event.keyCode===13) searchCamping();">
+        <button class="search-btn" id="search-btn" onclick="searchCamping()">검색</button>
+    </div>
+    <ul id="search-results"></ul>
 </div>
+
+<div id="status-badge"></div>
+
+<div id="legend">
+    <span><span class="dot" style="background:#2b8a3e;"></span>고캠핑 등록 캠핑장</span>
+    <span><span class="dot" style="background:#e8590c;"></span>고캠핑 미등록 (카카오맵)</span>
 </div>
-</body></html>
-<!-- 443588 1 2 0 1785897470 192 https://raw.githubusercontent.com/lazy2pro/my-camping-map/675c599af35348d70eae131757a285df2907e718/index.html -->
+
+
+<div id="map"></div>
+
+<button class="gps-btn" id="gps-btn" onclick="moveToCurrentLocation()">
+    <svg class="gps-icon" viewBox="0 0 24 24">
+        <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+    </svg>
+</button>
+
+<div id="bottom-sheet">
+    <div class="sheet-header">
+        <div>
+            <div id="camp-category" class="camp-category"></div>
+            <h3 id="camp-title" class="camp-title"></h3>
+        </div>
+        <button class="close-btn" onclick="closeSheet()">✕</button>
+    </div>
+    <p id="camp-address" class="camp-address"></p>
+    <p id="camp-tel" class="camp-tel"></p>
+    <div class="btn-row" id="reserve-btn-row"></div>
+</div>
+
+<script>
+// 예약/홈페이지로 부적절한 도메인 (블로그, 카페, SNS 등) - 이런 곳은 "예약 바로가기"로 쓰지 않음
+const NON_RESERVATION_HOSTS = [
+    'blog.naver.com', 'm.blog.naver.com', 'post.naver.com',
+    'cafe.naver.com', 'm.cafe.naver.com',
+    'instagram.com', 'facebook.com', 'youtube.com', 'youtu.be',
+    'tistory.com', 'brunch.co.kr', 'band.us'
+];
+
+function isReservationWorthyUrl(url) {
+    if (!url || !url.startsWith('http')) return false;
+    try {
+        const host = new URL(url).hostname.replace(/^www\./, '');
+        return !NON_RESERVATION_HOSTS.some((bad) => host.includes(bad));
+    } catch (e) {
+        return false;
+    }
+}
+
+// ------------------------------------------------------------------
+// 이 프론트엔드는 고캠핑 API를 직접 호출하지 않고,
+// 우리가 만든 /api/camping (Vercel 서버리스 함수) 를 통해서 데이터를 받아옵니다.
+// 이유: 브라우저 -> 고캠핑 API 직접 호출 시 CORS로 막히고, 서비스키도 노출되기 때문입니다.
+// ------------------------------------------------------------------
+
+const API_BASE = '/api/camping'; // 배포 도메인이 다르면 절대경로로 바꿔주세요 (예: https://내앱.vercel.app/api/camping)
+
+let map;
+let clusterer;
+let myLocationMarker = null;
+let currentMarkers = []; // { marker, data }
+let fetchTimer = null;
+let isFetching = false;
+
+// 초록 = 고캠핑 API 정식 등록, 주황 = 카카오맵에만 있는(고캠핑 미등록) 캠핑장
+function makePinImage(color) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 30 40">
+        <path d="M15 0C6.7 0 0 6.7 0 15c0 11 15 25 15 25s15-14 15-25C30 6.7 23.3 0 15 0z" fill="${color}"/>
+        <circle cx="15" cy="15" r="6" fill="white"/>
+    </svg>`;
+    const src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    return new kakao.maps.MarkerImage(src, new kakao.maps.Size(30, 40), { offset: new kakao.maps.Point(15, 40) });
+}
+let GREEN_MARKER, ORANGE_MARKER; // kakao SDK 로드 후 initMap에서 생성
+
+function distanceMeters(lat1, lng1, lat2, lng2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function initMap() {
+    const container = document.getElementById('map');
+    const options = {
+        center: new kakao.maps.LatLng(37.5665, 126.9780),
+        level: 8
+    };
+    map = new kakao.maps.Map(container, options);
+
+    GREEN_MARKER = makePinImage('#2b8a3e');
+    ORANGE_MARKER = makePinImage('#e8590c');
+    clusterer = new kakao.maps.MarkerClusterer({
+        map: map,
+        averageCenter: true,
+        minLevel: 6,
+        disableClickZoom: false
+    });
+
+    kakao.maps.event.addListener(map, 'click', () => {
+        closeSheet();
+        hideResults();
+    });
+
+    // 지도 이동/줌이 끝날 때마다(연속 이벤트 방지 위해 살짝 디바운스) 주변 캠핑장 재조회
+    kakao.maps.event.addListener(map, 'idle', () => {
+        clearTimeout(fetchTimer);
+        fetchTimer = setTimeout(fetchCampsInView, 400);
+    });
+
+    moveToCurrentLocation();
+    fetchCampsInView();
+}
+
+// 현재 지도 화면(bounds)에 맞는 반경(m)을 대략 계산
+function calcRadiusFromBounds() {
+    const bounds = map.getBounds();
+    const center = map.getCenter();
+    const ne = bounds.getNorthEast();
+    const R = 6371000; // 지구 반지름(m)
+    const dLat = (ne.getLat() - center.getLat()) * Math.PI / 180;
+    const dLng = (ne.getLng() - center.getLng()) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(center.getLat()*Math.PI/180) * Math.cos(ne.getLat()*Math.PI/180) * Math.sin(dLng/2)**2;
+    const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    // 고캠핑 API는 radius 최대 20000(20km)까지만 허용
+    return Math.min(Math.round(dist), 20000);
+}
+
+async function fetchCampsInView() {
+    if (!map || isFetching) return;
+    isFetching = true;
+    showStatus('주변 캠핑장 불러오는 중...');
+
+    const center = map.getCenter();
+    const radius = calcRadiusFromBounds();
+
+    try {
+        const url = `${API_BASE}?type=location&mapX=${center.getLng()}&mapY=${center.getLat()}&radius=${radius}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!res.ok) {
+            console.error('고캠핑 API 오류:', data);
+            showStatus(data.error || '캠핑장 정보를 불러오지 못했습니다.', true);
+            return;
+        }
+
+        renderCamps(data.camps);
+        showStatus(`캠핑장 ${data.camps.length}곳 표시 중`, false, 1500);
+
+        // 고캠핑에 없는 캠핑장을 카카오맵 자체 데이터로 보완
+        const extra = await fetchKakaoSupplementaryCamps(data.camps);
+        if (extra.length) {
+            addMarkers(extra, ORANGE_MARKER);
+        }
+    } catch (err) {
+        console.error(err);
+        showStatus('네트워크 오류로 캠핑장을 불러오지 못했습니다.', true);
+    } finally {
+        isFetching = false;
+    }
+}
+
+// 카카오 장소검색으로 "캠핑장" 키워드를 현재 화면 범위에서 찾고,
+// 이미 고캠핑 API에 있는 곳과 300m 이내로 겹치면 중복으로 보고 제외
+function fetchKakaoSupplementaryCamps(officialCamps) {
+    return new Promise((resolve) => {
+        if (!map) { resolve([]); return; }
+        const places = new kakao.maps.services.Places();
+        const bounds = map.getBounds();
+        places.keywordSearch('캠핑장', (results, status) => {
+            if (status !== kakao.maps.services.Status.OK) {
+                resolve([]);
+                return;
+            }
+            const extra = results
+                .map((r) => ({
+                    name: r.place_name,
+                    category: '카카오맵 등록 (고캠핑 미등록)',
+                    address: r.road_address_name || r.address_name || '',
+                    lat: parseFloat(r.y),
+                    lng: parseFloat(r.x),
+                    tel: r.phone || '',
+                    placeUrl: r.place_url || '',
+                    source: 'kakao',
+                }))
+                .filter((k) => !officialCamps.some((o) => distanceMeters(o.lat, o.lng, k.lat, k.lng) < 300));
+            resolve(extra);
+        }, { bounds });
+    });
+}
+
+function renderCamps(camps) {
+    // 기존 마커 정리
+    clusterer.clear();
+    currentMarkers.forEach(({ marker }) => marker.setMap(null));
+    currentMarkers = [];
+    addMarkers(camps, GREEN_MARKER);
+}
+
+function addMarkers(items, markerImage) {
+    const newMarkers = items.map((item) => {
+        const latLng = new kakao.maps.LatLng(item.lat, item.lng);
+        const marker = new kakao.maps.Marker({ position: latLng, image: markerImage });
+
+        kakao.maps.event.addListener(marker, 'click', () => {
+            hideResults();
+            openSheet(item);
+        });
+
+        currentMarkers.push({ marker, data: item });
+        return marker;
+    });
+
+    clusterer.addMarkers(newMarkers);
+}
+
+function moveToCurrentLocation() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const locPosition = new kakao.maps.LatLng(position.coords.latitude, position.coords.longitude);
+
+                if (!myLocationMarker) {
+                    myLocationMarker = new kakao.maps.Marker({ position: locPosition, map: map });
+                } else {
+                    myLocationMarker.setPosition(locPosition);
+                }
+
+                if (map) map.panTo(locPosition);
+            },
+            (error) => {
+                console.warn('GPS 위치를 가져올 수 없습니다.', error);
+            }
+        );
+    }
+}
+
+async function searchCamping() {
+    const rawInput = document.getElementById('search-keyword').value.trim();
+    closeSheet();
+
+    if (!rawInput) {
+        hideResults();
+        return;
+    }
+
+    const btn = document.getElementById('search-btn');
+    btn.disabled = true;
+    btn.innerText = '검색중';
+
+    try {
+        const url = `${API_BASE}?type=keyword&keyword=${encodeURIComponent(rawInput)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!res.ok) {
+            alert(data.error || '검색 중 오류가 발생했습니다.');
+            hideResults();
+            return;
+        }
+
+        if (data.camps.length === 0) {
+            // 야영장 '이름' 검색으로는 못 찾은 경우 (예: "계방산"처럼 산/지역 이름인 경우)
+            // 카카오 장소검색으로 위치를 찾아서 그 주변 캠핑장을 대신 보여줌
+            const fallbackFound = await searchByPlaceName(rawInput);
+            if (!fallbackFound) {
+                alert(`'${rawInput}' 검색 결과를 찾지 못했습니다.`);
+            }
+            hideResults();
+            return;
+        }
+
+        renderCamps(data.camps);
+
+        const listEl = document.getElementById('search-results');
+        listEl.innerHTML = '';
+
+        data.camps.forEach((item, index) => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <div class="result-title">${item.name}</div>
+                <div class="result-sub">
+                    <span class="result-category">${item.category}</span>
+                    <span>${item.address}</span>
+                </div>
+            `;
+            li.onclick = () => {
+                hideResults();
+                map.setCenter(new kakao.maps.LatLng(item.lat, item.lng));
+                map.setLevel(4);
+                openSheet(item);
+            };
+            listEl.appendChild(li);
+
+            if (index === 0) {
+                map.setCenter(new kakao.maps.LatLng(item.lat, item.lng));
+                map.setLevel(4);
+                openSheet(item);
+            }
+        });
+
+        listEl.style.display = 'block';
+    } catch (err) {
+        console.error(err);
+        alert('네트워크 오류로 검색하지 못했습니다.');
+    } finally {
+        btn.disabled = false;
+        btn.innerText = '검색';
+    }
+}
+
+// 야영장명 검색이 실패했을 때, 입력한 단어를 지명/장소로 보고
+// 카카오 장소검색으로 좌표를 찾은 뒤 그 주변 캠핑장을 보여줌
+function searchByPlaceName(keyword) {
+    return new Promise((resolve) => {
+        const places = new kakao.maps.services.Places();
+        places.keywordSearch(keyword, async (results, status) => {
+            if (status !== kakao.maps.services.Status.OK || !results.length) {
+                resolve(false);
+                return;
+            }
+            const place = results[0];
+            const lat = parseFloat(place.y);
+            const lng = parseFloat(place.x);
+
+            map.setCenter(new kakao.maps.LatLng(lat, lng));
+            map.setLevel(7);
+
+            showStatus(`'${keyword}' 근처 캠핑장을 찾았어요`, false, 2500);
+            await fetchCampsAt(lat, lng, 15000);
+            resolve(true);
+        });
+    });
+}
+
+async function fetchCampsAt(lat, lng, radius) {
+    try {
+        const url = `${API_BASE}?type=location&mapX=${lng}&mapY=${lat}&radius=${radius}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (res.ok) {
+            renderCamps(data.camps);
+            const extra = await fetchKakaoSupplementaryCamps(data.camps);
+            if (extra.length) {
+                addMarkers(extra, ORANGE_MARKER);
+            }
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+function hideResults() {
+    document.getElementById('search-results').style.display = 'none';
+}
+
+function showStatus(text, isError, autoHideMs) {
+    const el = document.getElementById('status-badge');
+    el.innerText = text;
+    el.style.background = isError ? 'rgba(224,49,49,0.85)' : 'rgba(0,0,0,0.7)';
+    el.style.display = 'block';
+    if (autoHideMs) {
+        setTimeout(() => { el.style.display = 'none'; }, autoHideMs);
+    }
+}
+
+function openSheet(item) {
+    const sheet = document.getElementById('bottom-sheet');
+    const gpsBtn = document.getElementById('gps-btn');
+    const titleEl = document.getElementById('camp-title');
+    const categoryEl = document.getElementById('camp-category');
+    const addrEl = document.getElementById('camp-address');
+    const telEl = document.getElementById('camp-tel');
+    const btnRow = document.getElementById('reserve-btn-row');
+
+    titleEl.innerText = item.name;
+    categoryEl.innerText = item.category;
+    addrEl.innerText = item.address;
+    telEl.innerText = item.tel ? `☎ ${item.tel}` : '';
+
+    const buttons = [];
+
+    if (item.source === 'kakao') {
+        // 고캠핑 API에 없는, 카카오맵 자체 데이터로 보완된 캠핑장
+        addrEl.innerText += ' (고캠핑 미등록 · 카카오맵 정보)';
+        if (item.placeUrl) {
+            buttons.push({ href: item.placeUrl, label: '카카오맵에서 상세보기', cls: 'primary' });
+        }
+    } else if (isReservationWorthyUrl(item.resveUrl)) {
+        // 1순위: 고캠핑 API가 제공하는 실제 예약 페이지 (블로그/카페/SNS면 제외)
+        buttons.push({
+            href: item.resveUrl,
+            label: item.resveCl ? `예약하기 (${item.resveCl})` : '예약 페이지 바로가기',
+            cls: 'primary',
+        });
+    } else if (isReservationWorthyUrl(item.homepage)) {
+        // 2순위: 공식 홈페이지 (블로그/카페/SNS면 제외)
+        buttons.push({ href: item.homepage, label: '홈페이지 바로가기', cls: 'primary' });
+    }
+
+    // 캠핏 / 땡큐캠핑에서 이름으로 바로 찾아보기
+    // (두 플랫폼 다 "이 캠핑장이 여기 있는지" 미리 알려주는 공개 API가 없어서,
+    //  정확한 예약 페이지 딥링크 대신 이름 검색 결과로 연결합니다)
+    buttons.push({
+        href: `https://www.google.com/search?q=${encodeURIComponent('site:camfit.co.kr ' + item.name)}`,
+        label: '캠핏에서 찾기',
+        cls: buttons.length === 0 ? 'primary' : 'secondary',
+    });
+    buttons.push({
+        href: `https://m.thankyoucamping.com/search/searchList.hbb?searchName=${encodeURIComponent(item.name)}`,
+        label: '땡큐캠핑에서 찾기',
+        cls: 'secondary',
+    });
+
+    btnRow.innerHTML = '';
+    btnRow.style.flexDirection = 'column';
+    buttons.forEach((b) => {
+        const a = document.createElement('a');
+        a.href = b.href;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.className = `reserve-btn ${b.cls}`;
+        a.innerText = b.label;
+        btnRow.appendChild(a);
+    });
+
+    sheet.classList.add('active');
+    gpsBtn.classList.add('shifted');
+}
+
+function closeSheet() {
+    document.getElementById('bottom-sheet').classList.remove('active');
+    document.getElementById('gps-btn').classList.remove('shifted');
+}
+
+window.onload = function() {
+    if (typeof kakao !== 'undefined' && kakao.maps) {
+        initMap();
+    } else {
+        alert('카카오맵 SDK를 로드하지 못했습니다.');
+    }
+};
+</script>
+</body>
+</html>
