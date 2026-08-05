@@ -512,7 +512,7 @@ function openSheet(item) {
     }
 
     // 캠핏 / 땡큐캠핑에서 이름으로 바로 찾아보기 (우선 검색결과 링크로 채워두고,
-    // 아래에서 구글 CSE로 실제 페이지를 찾으면 버튼을 업그레이드함)
+    // 아래에서 네이버 검색으로 실제 페이지를 찾으면 버튼을 업그레이드함)
     buttons.push({
         href: `https://www.google.com/search?q=${encodeURIComponent('site:camfit.co.kr ' + item.name)}`,
         label: '캠핏에서 찾기',
@@ -542,10 +542,8 @@ function openSheet(item) {
     sheet.classList.add('active');
     gpsBtn.classList.add('shifted');
 
-    // 캠핏/땡큐캠핑 실제 예약페이지를 구글 CSE로 찾아서, 확인되면 버튼을 업그레이드
-    if (item.source !== 'kakao') {
-        upgradeReservationButtons(item.name, btnRow);
-    }
+    // 고캠핑 미등록(카카오맵 보완) 캠핑장도 이름 기반 검증은 동일하게 적용
+    upgradeReservationButtons(item.name, btnRow);
 }
 
 // 마커를 빠르게 여러 번 클릭했을 때, 이전 요청 결과가 지금 열려있는(다른) 시트에
