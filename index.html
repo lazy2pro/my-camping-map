@@ -285,6 +285,7 @@ function fetchKakaoSupplementaryCamps(officialCamps) {
                 return;
             }
             const extra = results
+                .filter((r) => (r.category_name || '').includes('캠핑')) // 학원/카페 등 이름에만 '캠핑'이 우연히 매칭된 오탐 제거
                 .map((r) => ({
                     name: r.place_name,
                     category: '카카오맵 등록 (고캠핑 미등록)',
@@ -510,18 +511,19 @@ function openSheet(item) {
         buttons.push({ href: item.homepage, label: '홈페이지 바로가기', cls: 'primary' });
     }
 
-    // 캠핏 / 땡큐캠핑에서 이름으로 바로 찾아보기
-    // (두 플랫폼 다 "이 캠핑장이 여기 있는지" 미리 알려주는 공개 API가 없어서,
-    //  정확한 예약 페이지 딥링크 대신 이름 검색 결과로 연결합니다)
+    // 캠핏 / 땡큐캠핑에서 이름으로 바로 찾아보기 (우선 검색결과 링크로 채워두고,
+    // 아래에서 구글 CSE로 실제 페이지를 찾으면 버튼을 업그레이드함)
     buttons.push({
         href: `https://www.google.com/search?q=${encodeURIComponent('site:camfit.co.kr ' + item.name)}`,
         label: '캠핏에서 찾기',
         cls: buttons.length === 0 ? 'primary' : 'secondary',
+        role: 'camfit',
     });
     buttons.push({
         href: `https://m.thankyoucamping.com/search/searchList.hbb?searchName=${encodeURIComponent(item.name)}`,
         label: '땡큐캠핑에서 찾기',
         cls: 'secondary',
+        role: 'thankyoucamping',
     });
 
     btnRow.innerHTML = '';
@@ -533,11 +535,50 @@ function openSheet(item) {
         a.rel = 'noopener';
         a.className = `reserve-btn ${b.cls}`;
         a.innerText = b.label;
+        if (b.role) a.dataset.role = b.role;
         btnRow.appendChild(a);
     });
 
     sheet.classList.add('active');
     gpsBtn.classList.add('shifted');
+
+    // 캠핏/땡큐캠핑 실제 예약페이지를 구글 CSE로 찾아서, 확인되면 버튼을 업그레이드
+    if (item.source !== 'kakao') {
+        upgradeReservationButtons(item.name, btnRow);
+    }
+}
+
+// 마커를 빠르게 여러 번 클릭했을 때, 이전 요청 결과가 지금 열려있는(다른) 시트에
+// 잘못 반영되지 않도록 세대(generation) 토큰으로 방지
+let sheetGeneration = 0;
+
+async function upgradeReservationButtons(name, btnRow) {
+    const myGen = ++sheetGeneration;
+    try {
+        const res = await fetch(`/api/reservation-link?name=${encodeURIComponent(name)}`);
+        const data = await res.json();
+        if (!res.ok || myGen !== sheetGeneration) return; // 이미 다른 캠핑장 시트로 넘어갔으면 무시
+
+        if (data.camfit) {
+            const a = btnRow.querySelector('[data-role="camfit"]');
+            if (a) {
+                a.href = data.camfit;
+                a.innerText = '캠핏 예약페이지 바로가기';
+                a.className = 'reserve-btn primary';
+            }
+        }
+        if (data.thankyoucamping) {
+            const a = btnRow.querySelector('[data-role="thankyoucamping"]');
+            if (a) {
+                a.href = data.thankyoucamping;
+                a.innerText = '땡큐캠핑 예약페이지 바로가기';
+                a.className = 'reserve-btn primary';
+            }
+        }
+    } catch (err) {
+        console.error('예약페이지 확인 실패:', err);
+        // 실패해도 기존 '찾기' 검색 링크는 그대로 남아있으니 UX상 문제 없음
+    }
 }
 
 function closeSheet() {
