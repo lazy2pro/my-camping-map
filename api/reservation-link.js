@@ -77,6 +77,13 @@ export default async function handler(req, res) {
       }
     }
 
+    // 네이버지도 자체에 "네이버예약"이 연동된 캠핑장인지 확인
+    // (지도 엔진과 무관하게, 네이버지도 장소 페이지를 직접 열어서 표시 여부를 감지)
+    const naverMapUrl = `https://map.naver.com/p/search/${encodeURIComponent(name)}`;
+    const naverReserveResult = await pageHasNaverReservation(naverMapUrl);
+    result.naverReservation = naverReserveResult.hasReservation ? naverMapUrl : null;
+    if (debug) debugInfo.naverReservation = naverReserveResult;
+
     // 같은 캠핑장 이름은 7일간 캐시 (여러 사용자가 같은 캠핑장을 눌러도 API 재호출 안 함)
     // 디버그 요청은 캐시하지 않음
     if (!debug) {
@@ -117,5 +124,36 @@ async function pageContainsName(url, name) {
     };
   } catch (e) {
     return { verified: false, checked: false, reason: `페이지 요청 자체 실패: ${e.message}` };
+  }
+}
+
+// 네이버지도 장소 페이지를 열어서 "네이버예약" 표시가 있는지 확인
+// (네이버지도는 자바스크립트로 내용을 그리는 페이지라, 서버에서 단순 요청으로는
+//  못 읽어올 가능성이 있음 - 이 경우 hasReservation:false로 처리하고 debug로 원인 확인)
+async function pageHasNaverReservation(url) {
+  try {
+    const pageRes = await fetch(url, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+      },
+    });
+    if (!pageRes.ok) {
+      return { hasReservation: false, checked: false, reason: `페이지 응답 실패 (status ${pageRes.status})` };
+    }
+
+    const html = await pageRes.text();
+    const hasReservation = html.includes('네이버예약') || html.includes('N예약') || /"bookingBusinessId"\s*:\s*"[^"]+"/i.test(html);
+
+    return {
+      hasReservation,
+      checked: true,
+      htmlLength: html.length,
+      reason: hasReservation ? '네이버예약 표시 확인됨' : '네이버예약 표시 못 찾음 (해당 없거나 JS 렌더링 페이지라 못 읽었을 수 있음)',
+    };
+  } catch (e) {
+    return { hasReservation: false, checked: false, reason: `페이지 요청 자체 실패: ${e.message}` };
   }
 }
