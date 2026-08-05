@@ -4,13 +4,55 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>내 전용 캠핑 지도</title>
-    <!-- 카카오맵 SDK (https 명시) -->
-    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=0a2a1dd398016b31a421f8571610cb5a"></script>
+    <!-- 카카오맵 SDK (clusterer 라이브러리 추가: 마커 많을 때 뭉쳐서 표시) -->
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=0a2a1dd398016b31a421f8571610cb5a&libraries=services,clusterer"></script>
     <style>
         * { box-sizing: border-box; }
         body, html { margin:0; padding:0; height:100%; width:100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         #map { width:100%; height:100%; background: #e9ecef; }
-        
+
+        .search-wrapper {
+            position: fixed; top: 16px; left: 16px; right: 16px; z-index: 100;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .search-container {
+            display: flex; gap: 8px; background: white; padding: 6px;
+            border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .search-input {
+            flex: 1; border: none; outline: none; padding: 10px 12px;
+            font-size: 15px; border-radius: 8px; background: #f8f9fa;
+        }
+        .search-btn {
+            background: #2b8a3e; color: white; border: none;
+            padding: 0 16px; border-radius: 8px; font-weight: bold;
+            font-size: 14px; cursor: pointer; white-space: nowrap;
+        }
+        .search-btn:active { opacity: 0.85; }
+        .search-btn:disabled { background: #adb5bd; }
+
+        #search-results {
+            background: white; border-radius: 12px; max-height: 250px;
+            overflow-y: auto; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            display: none; padding: 0; margin: 0; list-style: none;
+        }
+        #search-results li {
+            padding: 12px 16px; border-bottom: 1px solid #f1f3f5;
+            cursor: pointer; transition: background 0.15s;
+        }
+        #search-results li:last-child { border-bottom: none; }
+        #search-results li:active { background: #e7f5ff; }
+        .result-title { font-weight: bold; font-size: 15px; color: #111; margin-bottom: 2px; }
+        .result-sub { font-size: 12px; color: #666; display: flex; gap: 8px; }
+        .result-category { color: #2b8a3e; font-weight: 600; }
+
+        #status-badge {
+            position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+            z-index: 90; background: rgba(0,0,0,0.7); color: white;
+            padding: 6px 14px; border-radius: 20px; font-size: 12px;
+            display: none; margin-top: 60px;
+        }
+
         .gps-btn {
             position: fixed; right: 16px; bottom: 30px; z-index: 100;
             width: 48px; height: 48px; border-radius: 50%;
@@ -20,11 +62,11 @@
             cursor: pointer; transition: transform 0.1s, bottom 0.3s ease-in-out;
         }
         .gps-btn:active { transform: scale(0.95); }
-        .gps-btn.shifted { bottom: 220px; }
+        .gps-btn.shifted { bottom: 260px; }
         .gps-icon { width: 22px; height: 22px; fill: #333; }
 
         #bottom-sheet {
-            position: fixed; bottom: -300px; left: 0; right: 0;
+            position: fixed; bottom: -400px; left: 0; right: 0;
             background: white; padding: 20px; border-radius: 20px 20px 0 0;
             box-shadow: 0 -4px 20px rgba(0,0,0,0.15); z-index: 1000;
             transition: bottom 0.3s ease-in-out;
@@ -33,9 +75,11 @@
         .sheet-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
         .camp-title { margin: 0; font-size: 18px; font-weight: bold; color: #111; }
         .camp-category { font-size: 12px; color: #2b8a3e; font-weight: 600; margin-bottom: 4px; }
-        .camp-address { margin: 0 0 16px 0; color: #666; font-size: 13px; line-height: 1.4; }
+        .camp-address { margin: 0 0 8px 0; color: #666; font-size: 13px; line-height: 1.4; }
+        .camp-tel { margin: 0 0 16px 0; color: #666; font-size: 13px; }
         .close-btn { background: none; border: none; font-size: 20px; color: #aaa; cursor: pointer; padding: 0; }
-        
+
+        .btn-row { display: flex; gap: 8px; }
         .reserve-btn {
             display: flex; justify-content: center; align-items: center;
             width: 100%; height: 48px; border-radius: 12px;
@@ -43,9 +87,21 @@
             text-decoration: none; border: none; transition: opacity 0.2s;
         }
         .reserve-btn:active { opacity: 0.8; }
+        .reserve-btn.primary { background: #2b8a3e; }
+        .reserve-btn.secondary { background: #495057; }
     </style>
 </head>
 <body>
+
+<div class="search-wrapper">
+    <div class="search-container">
+        <input type="text" id="search-keyword" class="search-input" placeholder="캠핑장 이름 검색 (예: 계방산)" onkeyup="if(event.keyCode===13) searchCamping();">
+        <button class="search-btn" id="search-btn" onclick="searchCamping()">검색</button>
+    </div>
+    <ul id="search-results"></ul>
+</div>
+
+<div id="status-badge"></div>
 
 <div id="map"></div>
 
@@ -64,55 +120,131 @@
         <button class="close-btn" onclick="closeSheet()">✕</button>
     </div>
     <p id="camp-address" class="camp-address"></p>
-    <a id="reserve-btn" class="reserve-btn" href="#" target="_blank">예약하기</a>
+    <p id="camp-tel" class="camp-tel"></p>
+    <div class="btn-row">
+        <a id="reserve-btn" class="reserve-btn primary" href="#" target="_blank" rel="noopener">예약 / 홈페이지</a>
+    </div>
 </div>
 
 <script>
-const GO_API_KEY = 'xTN%2BZ0QxcmqNGKucnGuSkyPD7vkVBd1K2s%2FmlNAlNG3LHq0IxriYaVpeJYBgBbtCS70wX2XbAACxIYGU4yaUMA%3D%3D';
+// ------------------------------------------------------------------
+// 이 프론트엔드는 고캠핑 API를 직접 호출하지 않고,
+// 우리가 만든 /api/camping (Vercel 서버리스 함수) 를 통해서 데이터를 받아옵니다.
+// 이유: 브라우저 -> 고캠핑 API 직접 호출 시 CORS로 막히고, 서비스키도 노출되기 때문입니다.
+// ------------------------------------------------------------------
+
+const API_BASE = '/api/camping'; // 배포 도메인이 다르면 절대경로로 바꿔주세요 (예: https://내앱.vercel.app/api/camping)
 
 let map;
+let clusterer;
 let myLocationMarker = null;
+let currentMarkers = []; // { marker, data }
+let fetchTimer = null;
+let isFetching = false;
 
-// SDK 완전 로드 보장을 위한 이벤트 처리
-window.addEventListener('load', function() {
-    if (typeof kakao === 'undefined' || !kakao.maps) {
-        alert('카카오맵 SDK를 로드하지 못했습니다. 카카오 도메인 설정을 확인해주세요.');
-        return;
-    }
+function initMap() {
+    const container = document.getElementById('map');
+    const options = {
+        center: new kakao.maps.LatLng(37.5665, 126.9780),
+        level: 8
+    };
+    map = new kakao.maps.Map(container, options);
 
-    kakao.maps.load(function() {
-        const container = document.getElementById('map');
-        const options = {
-            center: new kakao.maps.LatLng(37.5665, 126.9780),
-            level: 8
-        };
-        map = new kakao.maps.Map(container, options);
-        
-        kakao.maps.event.addListener(map, 'click', closeSheet);
-        
-        moveToCurrentLocation();
-        fetchCampingData();
+    clusterer = new kakao.maps.MarkerClusterer({
+        map: map,
+        averageCenter: true,
+        minLevel: 6,
+        disableClickZoom: false
     });
-});
+
+    kakao.maps.event.addListener(map, 'click', () => {
+        closeSheet();
+        hideResults();
+    });
+
+    // 지도 이동/줌이 끝날 때마다(연속 이벤트 방지 위해 살짝 디바운스) 주변 캠핑장 재조회
+    kakao.maps.event.addListener(map, 'idle', () => {
+        clearTimeout(fetchTimer);
+        fetchTimer = setTimeout(fetchCampsInView, 400);
+    });
+
+    moveToCurrentLocation();
+    fetchCampsInView();
+}
+
+// 현재 지도 화면(bounds)에 맞는 반경(m)을 대략 계산
+function calcRadiusFromBounds() {
+    const bounds = map.getBounds();
+    const center = map.getCenter();
+    const ne = bounds.getNorthEast();
+    const R = 6371000; // 지구 반지름(m)
+    const dLat = (ne.getLat() - center.getLat()) * Math.PI / 180;
+    const dLng = (ne.getLng() - center.getLng()) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(center.getLat()*Math.PI/180) * Math.cos(ne.getLat()*Math.PI/180) * Math.sin(dLng/2)**2;
+    const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    // 고캠핑 API는 radius 최대 20000(20km)까지만 허용
+    return Math.min(Math.round(dist), 20000);
+}
+
+async function fetchCampsInView() {
+    if (!map || isFetching) return;
+    isFetching = true;
+    showStatus('주변 캠핑장 불러오는 중...');
+
+    const center = map.getCenter();
+    const radius = calcRadiusFromBounds();
+
+    try {
+        const url = `${API_BASE}?type=location&mapX=${center.getLng()}&mapY=${center.getLat()}&radius=${radius}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!res.ok) {
+            console.error('고캠핑 API 오류:', data);
+            showStatus(data.error || '캠핑장 정보를 불러오지 못했습니다.', true);
+            return;
+        }
+
+        renderCamps(data.camps);
+        showStatus(`캠핑장 ${data.camps.length}곳 표시 중`, false, 1500);
+    } catch (err) {
+        console.error(err);
+        showStatus('네트워크 오류로 캠핑장을 불러오지 못했습니다.', true);
+    } finally {
+        isFetching = false;
+    }
+}
+
+function renderCamps(camps) {
+    // 기존 마커 정리
+    clusterer.clear();
+    currentMarkers.forEach(({ marker }) => marker.setMap(null));
+    currentMarkers = [];
+
+    const newMarkers = camps.map((item) => {
+        const latLng = new kakao.maps.LatLng(item.lat, item.lng);
+        const marker = new kakao.maps.Marker({ position: latLng });
+
+        kakao.maps.event.addListener(marker, 'click', () => {
+            hideResults();
+            openSheet(item);
+        });
+
+        currentMarkers.push({ marker, data: item });
+        return marker;
+    });
+
+    clusterer.addMarkers(newMarkers);
+}
 
 function moveToCurrentLocation() {
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (position) => {
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
-                const locPosition = new kakao.maps.LatLng(lat, lng);
+                const locPosition = new kakao.maps.LatLng(position.coords.latitude, position.coords.longitude);
 
                 if (!myLocationMarker) {
-                    const markerImage = new kakao.maps.MarkerImage(
-                        'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
-                        new kakao.maps.Size(24, 35)
-                    );
-                    myLocationMarker = new kakao.maps.Marker({
-                        position: locPosition,
-                        image: markerImage,
-                        map: map
-                    });
+                    myLocationMarker = new kakao.maps.Marker({ position: locPosition, map: map });
                 } else {
                     myLocationMarker.setPosition(locPosition);
                 }
@@ -120,37 +252,93 @@ function moveToCurrentLocation() {
                 if (map) map.panTo(locPosition);
             },
             (error) => {
-                console.warn('GPS 위치 정보를 가져올 수 없습니다.', error);
-            },
-            { enableHighAccuracy: true }
+                console.warn('GPS 위치를 가져올 수 없습니다.', error);
+            }
         );
     }
 }
 
-function fetchCampingData() {
-    // https 프로토콜 명시
-    const url = `https://apis.data.go.kr/B551011/GoCamping/basedList?serviceKey=${GO_API_KEY}&numOfRows=500&pageNo=1&MobileOS=ETC&MobileApp=MyCampingApp&_type=json`;
+async function searchCamping() {
+    const rawInput = document.getElementById('search-keyword').value.trim();
+    closeSheet();
 
-    fetch(url)
-        .then(res => res.json())
-        .then(data => {
-            const items = data.response?.body?.items?.item || [];
-            
-            items.forEach(item => {
-                if (!item.mapY || !item.mapX) return;
+    if (!rawInput) {
+        hideResults();
+        return;
+    }
 
-                const latLng = new kakao.maps.LatLng(item.mapY, item.mapX);
-                const marker = new kakao.maps.Marker({
-                    position: latLng,
-                    map: map
-                });
+    const btn = document.getElementById('search-btn');
+    btn.disabled = true;
+    btn.innerText = '검색중';
 
-                kakao.maps.event.addListener(marker, 'click', () => {
-                    openSheet(item);
-                });
-            });
-        })
-        .catch(err => console.error('API 호출 에러:', err));
+    try {
+        const url = `${API_BASE}?type=keyword&keyword=${encodeURIComponent(rawInput)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!res.ok) {
+            alert(data.error || '검색 중 오류가 발생했습니다.');
+            hideResults();
+            return;
+        }
+
+        if (data.camps.length === 0) {
+            alert(`'${rawInput}' 검색 결과를 찾지 못했습니다.`);
+            hideResults();
+            return;
+        }
+
+        renderCamps(data.camps);
+
+        const listEl = document.getElementById('search-results');
+        listEl.innerHTML = '';
+
+        data.camps.forEach((item, index) => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <div class="result-title">${item.name}</div>
+                <div class="result-sub">
+                    <span class="result-category">${item.category}</span>
+                    <span>${item.address}</span>
+                </div>
+            `;
+            li.onclick = () => {
+                hideResults();
+                map.setCenter(new kakao.maps.LatLng(item.lat, item.lng));
+                map.setLevel(4);
+                openSheet(item);
+            };
+            listEl.appendChild(li);
+
+            if (index === 0) {
+                map.setCenter(new kakao.maps.LatLng(item.lat, item.lng));
+                map.setLevel(4);
+                openSheet(item);
+            }
+        });
+
+        listEl.style.display = 'block';
+    } catch (err) {
+        console.error(err);
+        alert('네트워크 오류로 검색하지 못했습니다.');
+    } finally {
+        btn.disabled = false;
+        btn.innerText = '검색';
+    }
+}
+
+function hideResults() {
+    document.getElementById('search-results').style.display = 'none';
+}
+
+function showStatus(text, isError, autoHideMs) {
+    const el = document.getElementById('status-badge');
+    el.innerText = text;
+    el.style.background = isError ? 'rgba(224,49,49,0.85)' : 'rgba(0,0,0,0.7)';
+    el.style.display = 'block';
+    if (autoHideMs) {
+        setTimeout(() => { el.style.display = 'none'; }, autoHideMs);
+    }
 }
 
 function openSheet(item) {
@@ -159,43 +347,23 @@ function openSheet(item) {
     const titleEl = document.getElementById('camp-title');
     const categoryEl = document.getElementById('camp-category');
     const addrEl = document.getElementById('camp-address');
+    const telEl = document.getElementById('camp-tel');
     const btnEl = document.getElementById('reserve-btn');
 
-    titleEl.innerText = item.facltNm;
-    categoryEl.innerText = item.induty || '캠핑장';
-    addrEl.innerText = item.addr1 || '주소 정보 없음';
+    titleEl.innerText = item.name;
+    categoryEl.innerText = item.category;
+    addrEl.innerText = item.address;
+    telEl.innerText = item.tel ? `☎ ${item.tel}` : '';
 
-    const resveUrl = (item.resveUrl || '').trim();
-    const cleanUrl = resveUrl.toLowerCase();
-    
-    let btnBg = '#333333';
-    let btnText = '홈페이지 예약';
-    let targetUrl = resveUrl;
-
-    if (!cleanUrl || cleanUrl === 'null') {
-        if (item.tel) {
-            btnBg = '#495057';
-            btnText = '전화 문의 (' + item.tel + ')';
-            targetUrl = 'tel:' + item.tel.replace(/[^0-9]/g, '');
-        } else {
-            btnBg = '#adb5bd';
-            btnText = '예약 정보 없음';
-            targetUrl = '#';
-        }
-    } else if (cleanUrl.includes('naver.com')) {
-        btnBg = '#03C75A';
-        btnText = '네이버 예약';
-    } else if (cleanUrl.includes('camfit.co.kr')) {
-        btnBg = '#22B8CF';
-        btnText = '캠핏 예약';
-    } else if (cleanUrl.includes('campingrez.com') || cleanUrl.includes('thankyoucamping.com')) {
-        btnBg = '#FF6B6B';
-        btnText = '땡큐캠핑 예약';
+    // 고캠핑 API에는 캠핏/땡큐캠핑 예약 딥링크가 들어있지 않습니다.
+    // 공식 홈페이지가 있으면 그리로, 없으면 네이버 검색으로 안내합니다.
+    if (item.homepage && item.homepage.startsWith('http')) {
+        btnEl.href = item.homepage;
+        btnEl.innerText = '홈페이지 / 예약 바로가기';
+    } else {
+        btnEl.href = `https://search.naver.com/search.naver?query=${encodeURIComponent(item.name + ' 예약')}`;
+        btnEl.innerText = '예약 정보 검색하기 (네이버)';
     }
-
-    btnEl.style.backgroundColor = btnBg;
-    btnEl.innerText = btnText;
-    btnEl.href = targetUrl;
 
     sheet.classList.add('active');
     gpsBtn.classList.add('shifted');
@@ -205,6 +373,14 @@ function closeSheet() {
     document.getElementById('bottom-sheet').classList.remove('active');
     document.getElementById('gps-btn').classList.remove('shifted');
 }
+
+window.onload = function() {
+    if (typeof kakao !== 'undefined' && kakao.maps) {
+        initMap();
+    } else {
+        alert('카카오맵 SDK를 로드하지 못했습니다.');
+    }
+};
 </script>
 </body>
 </html>
