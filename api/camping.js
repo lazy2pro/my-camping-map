@@ -76,6 +76,8 @@ export default async function handler(req, res) {
         lng: parseFloat(it.mapX),
         tel: (it.tel || '').trim(),
         homepage: (it.homepage || '').replace(/<[^>]*>/g, '').trim(), // 종종 <a> 태그로 옴
+        resveUrl: (it.resveUrl || '').replace(/<[^>]*>/g, '').trim(), // 예약 페이지 (캠핏/땡큐캠핑 등으로 연결되는 경우 많음)
+        resveCl: it.resveCl || '', // 예약 구분 (예: 온라인실시간예약)
         image: it.firstImageUrl || '',
       }));
 

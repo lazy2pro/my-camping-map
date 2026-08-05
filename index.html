@@ -283,7 +283,12 @@ async function searchCamping() {
         }
 
         if (data.camps.length === 0) {
-            alert(`'${rawInput}' 검색 결과를 찾지 못했습니다.`);
+            // 야영장 '이름' 검색으로는 못 찾은 경우 (예: "계방산"처럼 산/지역 이름인 경우)
+            // 카카오 장소검색으로 위치를 찾아서 그 주변 캠핑장을 대신 보여줌
+            const fallbackFound = await searchByPlaceName(rawInput);
+            if (!fallbackFound) {
+                alert(`'${rawInput}' 검색 결과를 찾지 못했습니다.`);
+            }
             hideResults();
             return;
         }
@@ -327,6 +332,43 @@ async function searchCamping() {
     }
 }
 
+// 야영장명 검색이 실패했을 때, 입력한 단어를 지명/장소로 보고
+// 카카오 장소검색으로 좌표를 찾은 뒤 그 주변 캠핑장을 보여줌
+function searchByPlaceName(keyword) {
+    return new Promise((resolve) => {
+        const places = new kakao.maps.services.Places();
+        places.keywordSearch(keyword, async (results, status) => {
+            if (status !== kakao.maps.services.Status.OK || !results.length) {
+                resolve(false);
+                return;
+            }
+            const place = results[0];
+            const lat = parseFloat(place.y);
+            const lng = parseFloat(place.x);
+
+            map.setCenter(new kakao.maps.LatLng(lat, lng));
+            map.setLevel(7);
+
+            showStatus(`'${keyword}' 근처 캠핑장을 찾았어요`, false, 2500);
+            await fetchCampsAt(lat, lng, 15000);
+            resolve(true);
+        });
+    });
+}
+
+async function fetchCampsAt(lat, lng, radius) {
+    try {
+        const url = `${API_BASE}?type=location&mapX=${lng}&mapY=${lat}&radius=${radius}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (res.ok) {
+            renderCamps(data.camps);
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
+
 function hideResults() {
     document.getElementById('search-results').style.display = 'none';
 }
@@ -355,9 +397,12 @@ function openSheet(item) {
     addrEl.innerText = item.address;
     telEl.innerText = item.tel ? `☎ ${item.tel}` : '';
 
-    // 고캠핑 API에는 캠핏/땡큐캠핑 예약 딥링크가 들어있지 않습니다.
-    // 공식 홈페이지가 있으면 그리로, 없으면 네이버 검색으로 안내합니다.
-    if (item.homepage && item.homepage.startsWith('http')) {
+    // 우선순위: 예약 페이지(resveUrl, 캠핏/땡큐캠핑 등으로 연결되는 경우 많음)
+    // -> 공식 홈페이지 -> 네이버 검색(최후 수단)
+    if (item.resveUrl && item.resveUrl.startsWith('http')) {
+        btnEl.href = item.resveUrl;
+        btnEl.innerText = item.resveCl ? `예약하기 (${item.resveCl})` : '예약 페이지 바로가기';
+    } else if (item.homepage && item.homepage.startsWith('http')) {
         btnEl.href = item.homepage;
         btnEl.innerText = '홈페이지 / 예약 바로가기';
     } else {
