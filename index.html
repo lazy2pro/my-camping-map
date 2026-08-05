@@ -79,7 +79,7 @@
         .camp-tel { margin: 0 0 16px 0; color: #666; font-size: 13px; }
         .close-btn { background: none; border: none; font-size: 20px; color: #aaa; cursor: pointer; padding: 0; }
 
-        .btn-row { display: flex; gap: 8px; }
+        .btn-row { display: flex; flex-direction: column; gap: 8px; }
         .reserve-btn {
             display: flex; justify-content: center; align-items: center;
             width: 100%; height: 48px; border-radius: 12px;
@@ -88,7 +88,7 @@
         }
         .reserve-btn:active { opacity: 0.8; }
         .reserve-btn.primary { background: #2b8a3e; }
-        .reserve-btn.secondary { background: #495057; }
+        .reserve-btn.secondary { background: #495057; height: 42px; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -121,12 +121,28 @@
     </div>
     <p id="camp-address" class="camp-address"></p>
     <p id="camp-tel" class="camp-tel"></p>
-    <div class="btn-row">
-        <a id="reserve-btn" class="reserve-btn primary" href="#" target="_blank" rel="noopener">예약 / 홈페이지</a>
-    </div>
+    <div class="btn-row" id="reserve-btn-row"></div>
 </div>
 
 <script>
+// 예약/홈페이지로 부적절한 도메인 (블로그, 카페, SNS 등) - 이런 곳은 "예약 바로가기"로 쓰지 않음
+const NON_RESERVATION_HOSTS = [
+    'blog.naver.com', 'm.blog.naver.com', 'post.naver.com',
+    'cafe.naver.com', 'm.cafe.naver.com',
+    'instagram.com', 'facebook.com', 'youtube.com', 'youtu.be',
+    'tistory.com', 'brunch.co.kr', 'band.us'
+];
+
+function isReservationWorthyUrl(url) {
+    if (!url || !url.startsWith('http')) return false;
+    try {
+        const host = new URL(url).hostname.replace(/^www\./, '');
+        return !NON_RESERVATION_HOSTS.some((bad) => host.includes(bad));
+    } catch (e) {
+        return false;
+    }
+}
+
 // ------------------------------------------------------------------
 // 이 프론트엔드는 고캠핑 API를 직접 호출하지 않고,
 // 우리가 만든 /api/camping (Vercel 서버리스 함수) 를 통해서 데이터를 받아옵니다.
@@ -390,25 +406,52 @@ function openSheet(item) {
     const categoryEl = document.getElementById('camp-category');
     const addrEl = document.getElementById('camp-address');
     const telEl = document.getElementById('camp-tel');
-    const btnEl = document.getElementById('reserve-btn');
+    const btnRow = document.getElementById('reserve-btn-row');
 
     titleEl.innerText = item.name;
     categoryEl.innerText = item.category;
     addrEl.innerText = item.address;
     telEl.innerText = item.tel ? `☎ ${item.tel}` : '';
 
-    // 우선순위: 예약 페이지(resveUrl, 캠핏/땡큐캠핑 등으로 연결되는 경우 많음)
-    // -> 공식 홈페이지 -> 네이버 검색(최후 수단)
-    if (item.resveUrl && item.resveUrl.startsWith('http')) {
-        btnEl.href = item.resveUrl;
-        btnEl.innerText = item.resveCl ? `예약하기 (${item.resveCl})` : '예약 페이지 바로가기';
-    } else if (item.homepage && item.homepage.startsWith('http')) {
-        btnEl.href = item.homepage;
-        btnEl.innerText = '홈페이지 / 예약 바로가기';
-    } else {
-        btnEl.href = `https://search.naver.com/search.naver?query=${encodeURIComponent(item.name + ' 예약')}`;
-        btnEl.innerText = '예약 정보 검색하기 (네이버)';
+    const buttons = [];
+
+    // 1순위: 고캠핑 API가 제공하는 실제 예약 페이지 (블로그/카페/SNS면 제외)
+    if (isReservationWorthyUrl(item.resveUrl)) {
+        buttons.push({
+            href: item.resveUrl,
+            label: item.resveCl ? `예약하기 (${item.resveCl})` : '예약 페이지 바로가기',
+            cls: 'primary',
+        });
+    } else if (isReservationWorthyUrl(item.homepage)) {
+        // 2순위: 공식 홈페이지 (블로그/카페/SNS면 제외)
+        buttons.push({ href: item.homepage, label: '홈페이지 바로가기', cls: 'primary' });
     }
+
+    // 캠핏 / 땡큐캠핑에서 이름으로 바로 찾아보기
+    // (두 플랫폼 다 "이 캠핑장이 여기 있는지" 미리 알려주는 공개 API가 없어서,
+    //  정확한 예약 페이지 딥링크 대신 이름 검색 결과로 연결합니다)
+    buttons.push({
+        href: `https://www.google.com/search?q=${encodeURIComponent('site:camfit.co.kr ' + item.name)}`,
+        label: '캠핏에서 찾기',
+        cls: buttons.length === 0 ? 'primary' : 'secondary',
+    });
+    buttons.push({
+        href: `https://m.thankyoucamping.com/search/searchList.hbb?searchName=${encodeURIComponent(item.name)}`,
+        label: '땡큐캠핑에서 찾기',
+        cls: 'secondary',
+    });
+
+    btnRow.innerHTML = '';
+    btnRow.style.flexDirection = 'column';
+    buttons.forEach((b) => {
+        const a = document.createElement('a');
+        a.href = b.href;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.className = `reserve-btn ${b.cls}`;
+        a.innerText = b.label;
+        btnRow.appendChild(a);
+    });
 
     sheet.classList.add('active');
     gpsBtn.classList.add('shifted');
