@@ -50,21 +50,32 @@ export default async function handler(req, res) {
       link: (it.link || '').replace(/&amp;/g, '&'),
     }));
 
+    const debug = req.query.debug === '1';
     const result = { camfit: null, thankyoucamping: null };
+    const debugInfo = { totalResults: searchData.total, allLinks: items.map((it) => it.link) };
 
     for (const [key, pattern] of Object.entries(TARGET_SITES)) {
       const found = items.find((it) => pattern.test(it.link));
-      if (!found) continue;
+      if (!found) {
+        if (debug) debugInfo[key] = { candidateFound: false };
+        continue;
+      }
 
-      const verified = await pageContainsName(found.link, name);
-      if (verified) {
+      const verifyResult = await pageContainsName(found.link, name);
+      if (verifyResult.verified) {
         result[key] = found.link;
+      }
+      if (debug) {
+        debugInfo[key] = { candidateFound: true, candidateLink: found.link, ...verifyResult };
       }
     }
 
     // 같은 캠핑장 이름은 7일간 캐시 (여러 사용자가 같은 캠핑장을 눌러도 API 재호출 안 함)
-    res.setHeader('Cache-Control', 's-maxage=604800, stale-while-revalidate=86400');
-    return res.status(200).json(result);
+    // 디버그 요청은 캐시하지 않음
+    if (!debug) {
+      res.setHeader('Cache-Control', 's-maxage=604800, stale-while-revalidate=86400');
+    }
+    return res.status(200).json(debug ? { ...result, debug: debugInfo } : result);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -77,13 +88,20 @@ async function pageContainsName(url, name) {
     const pageRes = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MyCampingMapBot/1.0)' },
     });
-    if (!pageRes.ok) return false;
+    if (!pageRes.ok) {
+      return { verified: false, reason: `페이지 응답 실패 (status ${pageRes.status})` };
+    }
 
     const html = await pageRes.text();
     const normalize = (s) => s.replace(/\s+/g, '').toLowerCase();
+    const found = normalize(html.slice(0, 30000)).includes(normalize(name));
 
-    return normalize(html.slice(0, 30000)).includes(normalize(name));
+    return {
+      verified: found,
+      reason: found ? '이름 확인됨' : '페이지는 열렸지만 이름을 못 찾음 (JS 렌더링 페이지일 가능성)',
+      htmlLength: html.length,
+    };
   } catch (e) {
-    return false; // 페이지를 못 가져오면 검증 실패로 처리 (안전하게 링크 제공 안 함)
+    return { verified: false, reason: `페이지 요청 자체 실패: ${e.message}` };
   }
 }
