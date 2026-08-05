@@ -4,12 +4,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>내 전용 캠핑 지도</title>
-    <!-- 1. https: 명시 및 동적 로딩(autoload=false) 옵션 추가 -->
-    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=0a2a1dd398016b31a421f8571610cb5a&autoload=false"></script>
+    <!-- 카카오맵 SDK (https 명시) -->
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=0a2a1dd398016b31a421f8571610cb5a"></script>
     <style>
         * { box-sizing: border-box; }
         body, html { margin:0; padding:0; height:100%; width:100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        #map { width:100%; height:100%; }
+        #map { width:100%; height:100%; background: #e9ecef; }
         
         .gps-btn {
             position: fixed; right: 16px; bottom: 30px; z-index: 100;
@@ -73,14 +73,14 @@ const GO_API_KEY = 'xTN%2BZ0QxcmqNGKucnGuSkyPD7vkVBd1K2s%2FmlNAlNG3LHq0IxriYaVpe
 let map;
 let myLocationMarker = null;
 
-// 2. kakao.maps.load() 함수를 통해 SDK가 완전히 로드된 후 지도 생성
-function initMap() {
+// SDK 완전 로드 보장을 위한 이벤트 처리
+window.addEventListener('load', function() {
     if (typeof kakao === 'undefined' || !kakao.maps) {
-        console.error('카카오맵 SDK를 로드할 수 없습니다.');
+        alert('카카오맵 SDK를 로드하지 못했습니다. 카카오 도메인 설정을 확인해주세요.');
         return;
     }
 
-    kakao.maps.load(() => {
+    kakao.maps.load(function() {
         const container = document.getElementById('map');
         const options = {
             center: new kakao.maps.LatLng(37.5665, 126.9780),
@@ -93,7 +93,7 @@ function initMap() {
         moveToCurrentLocation();
         fetchCampingData();
     });
-}
+});
 
 function moveToCurrentLocation() {
     if (navigator.geolocation) {
@@ -128,6 +128,7 @@ function moveToCurrentLocation() {
 }
 
 function fetchCampingData() {
+    // https 프로토콜 명시
     const url = `https://apis.data.go.kr/B551011/GoCamping/basedList?serviceKey=${GO_API_KEY}&numOfRows=500&pageNo=1&MobileOS=ETC&MobileApp=MyCampingApp&_type=json`;
 
     fetch(url)
@@ -204,8 +205,6 @@ function closeSheet() {
     document.getElementById('bottom-sheet').classList.remove('active');
     document.getElementById('gps-btn').classList.remove('shifted');
 }
-
-window.onload = initMap;
 </script>
 </body>
 </html>
