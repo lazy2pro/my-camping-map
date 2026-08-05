@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>내 전용 캠핑 지도</title>
-    <!-- 카카오맵 SDK (clusterer 라이브러리 추가: 마커 많을 때 뭉쳐서 표시) -->
+    <!-- 카카오맵 SDK (services, clusterer 라이브러리 추가) -->
     <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=0a2a1dd398016b31a421f8571610cb5a&libraries=services,clusterer"></script>
     <style>
         * { box-sizing: border-box; }
@@ -45,6 +45,7 @@
         .result-title { font-weight: bold; font-size: 15px; color: #111; margin-bottom: 2px; }
         .result-sub { font-size: 12px; color: #666; display: flex; gap: 8px; }
         .result-category { color: #2b8a3e; font-weight: 600; }
+        .result-source { font-size: 10px; padding: 1px 4px; border-radius: 4px; background: #eee; margin-left: auto; }
 
         #status-badge {
             position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
@@ -66,7 +67,7 @@
         .gps-icon { width: 22px; height: 22px; fill: #333; }
 
         #bottom-sheet {
-            position: fixed; bottom: -400px; left: 0; right: 0;
+            position: fixed; bottom: -450px; left: 0; right: 0;
             background: white; padding: 20px; border-radius: 20px 20px 0 0;
             box-shadow: 0 -4px 20px rgba(0,0,0,0.15); z-index: 1000;
             transition: bottom 0.3s ease-in-out;
@@ -76,7 +77,8 @@
         .camp-title { margin: 0; font-size: 18px; font-weight: bold; color: #111; }
         .camp-category { font-size: 12px; color: #2b8a3e; font-weight: 600; margin-bottom: 4px; }
         .camp-address { margin: 0 0 8px 0; color: #666; font-size: 13px; line-height: 1.4; }
-        .camp-tel { margin: 0 0 16px 0; color: #666; font-size: 13px; }
+        .camp-tel { margin: 0 0 12px 0; color: #666; font-size: 13px; }
+        .source-tag { display: inline-block; font-size: 11px; color: #888; background: #f1f3f5; padding: 2px 6px; border-radius: 4px; margin-bottom: 12px; }
         .close-btn { background: none; border: none; font-size: 20px; color: #aaa; cursor: pointer; padding: 0; }
 
         .btn-row { display: flex; flex-direction: column; gap: 8px; }
@@ -89,6 +91,7 @@
         .reserve-btn:active { opacity: 0.8; }
         .reserve-btn.primary { background: #2b8a3e; }
         .reserve-btn.secondary { background: #495057; height: 42px; font-size: 14px; }
+        .reserve-btn.kakao { background: #fee500; color: #3c1e1e; height: 42px; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -121,11 +124,11 @@
     </div>
     <p id="camp-address" class="camp-address"></p>
     <p id="camp-tel" class="camp-tel"></p>
+    <div id="source-tag" class="source-tag"></div>
     <div class="btn-row" id="reserve-btn-row"></div>
 </div>
 
 <script>
-// 예약/홈페이지로 부적절한 도메인 (블로그, 카페, SNS 등) - 이런 곳은 "예약 바로가기"로 쓰지 않음
 const NON_RESERVATION_HOSTS = [
     'blog.naver.com', 'm.blog.naver.com', 'post.naver.com',
     'cafe.naver.com', 'm.cafe.naver.com',
@@ -143,20 +146,21 @@ function isReservationWorthyUrl(url) {
     }
 }
 
-// ------------------------------------------------------------------
-// 이 프론트엔드는 고캠핑 API를 직접 호출하지 않고,
-// 우리가 만든 /api/camping (Vercel 서버리스 함수) 를 통해서 데이터를 받아옵니다.
-// 이유: 브라우저 -> 고캠핑 API 직접 호출 시 CORS로 막히고, 서비스키도 노출되기 때문입니다.
-// ------------------------------------------------------------------
-
-const API_BASE = '/api/camping'; // 배포 도메인이 다르면 절대경로로 바꿔주세요 (예: https://내앱.vercel.app/api/camping)
+const API_BASE = '/api/camping';
 
 let map;
 let clusterer;
 let myLocationMarker = null;
-let currentMarkers = []; // { marker, data }
+let currentMarkers = [];
 let fetchTimer = null;
 let isFetching = false;
+
+// 마커 이미지 설정
+const MARKER_IMG_GO = new kakao.maps.MarkerImage(
+    'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
+    new kakao.maps.Size(24, 35)
+);
+const MARKER_IMG_KAKAO = null; // 기본 마커 사용 (또는 다른 이미지)
 
 function initMap() {
     const container = document.getElementById('map');
@@ -178,68 +182,121 @@ function initMap() {
         hideResults();
     });
 
-    // 지도 이동/줌이 끝날 때마다(연속 이벤트 방지 위해 살짝 디바운스) 주변 캠핑장 재조회
     kakao.maps.event.addListener(map, 'idle', () => {
         clearTimeout(fetchTimer);
-        fetchTimer = setTimeout(fetchCampsInView, 400);
+        fetchTimer = setTimeout(fetchCampsInView, 500);
     });
 
     moveToCurrentLocation();
     fetchCampsInView();
 }
 
-// 현재 지도 화면(bounds)에 맞는 반경(m)을 대략 계산
 function calcRadiusFromBounds() {
     const bounds = map.getBounds();
     const center = map.getCenter();
     const ne = bounds.getNorthEast();
-    const R = 6371000; // 지구 반지름(m)
+    const R = 6371000;
     const dLat = (ne.getLat() - center.getLat()) * Math.PI / 180;
     const dLng = (ne.getLng() - center.getLng()) * Math.PI / 180;
     const a = Math.sin(dLat/2)**2 + Math.cos(center.getLat()*Math.PI/180) * Math.cos(ne.getLat()*Math.PI/180) * Math.sin(dLng/2)**2;
     const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    // 고캠핑 API는 radius 최대 20000(20km)까지만 허용
     return Math.min(Math.round(dist), 20000);
+}
+
+// 거리 계산 (미터 단위)
+function getDistance(lat1, lng1, lat2, lng2) {
+    const R = 6371e3;
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lng2-lng1) * Math.PI/180;
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+// 데이터 병합 및 중복 제거
+function mergeCamps(goCamps, kakaoPlaces) {
+    const merged = [...goCamps.map(c => ({ ...c, source: 'gocamping' }))];
+    
+    kakaoPlaces.forEach(kp => {
+        const kpLat = parseFloat(kp.y);
+        const kpLng = parseFloat(kp.x);
+        const kpName = kp.place_name.replace(/\s+/g, '');
+        
+        // 중복 확인: 이름이 포함되거나 200m 이내에 같은 이름의 캠핑장이 있는 경우
+        const isDup = merged.some(m => {
+            const mName = m.name.replace(/\s+/g, '');
+            const dist = getDistance(m.lat, m.lng, kpLat, kpLng);
+            return (mName.includes(kpName) || kpName.includes(mName)) && dist < 300;
+        });
+        
+        if (!isDup) {
+            merged.push({
+                name: kp.place_name,
+                category: kp.category_name.split(' > ').pop(),
+                address: kp.road_address_name || kp.address_name,
+                tel: kp.phone,
+                lat: kpLat,
+                lng: kpLng,
+                source: 'kakao',
+                placeUrl: kp.place_url,
+                id: kp.id
+            });
+        }
+    });
+    
+    return merged;
 }
 
 async function fetchCampsInView() {
     if (!map || isFetching) return;
     isFetching = true;
-    showStatus('주변 캠핑장 불러오는 중...');
+    showStatus('캠핑장 정보를 불러오는 중...');
 
     const center = map.getCenter();
     const radius = calcRadiusFromBounds();
+    const bounds = map.getBounds();
 
     try {
-        const url = `${API_BASE}?type=location&mapX=${center.getLng()}&mapY=${center.getLat()}&radius=${radius}`;
-        const res = await fetch(url);
-        const data = await res.json();
+        // 1. 고캠핑 데이터 가져오기
+        const goUrl = `${API_BASE}?type=location&mapX=${center.getLng()}&mapY=${center.getLat()}&radius=${radius}`;
+        const goRes = await fetch(goUrl);
+        const goData = goRes.ok ? await goRes.json() : { camps: [] };
 
-        if (!res.ok) {
-            console.error('고캠핑 API 오류:', data);
-            showStatus(data.error || '캠핑장 정보를 불러오지 못했습니다.', true);
-            return;
-        }
+        // 2. 카카오 로컬 검색 데이터 가져오기
+        const kakaoData = await new Promise((resolve) => {
+            const ps = new kakao.maps.services.Places();
+            ps.keywordSearch('캠핑장', (data, status) => {
+                if (status === kakao.maps.services.Status.OK) resolve(data);
+                else resolve([]);
+            }, { bounds: bounds, size: 15 });
+        });
 
-        renderCamps(data.camps);
-        showStatus(`캠핑장 ${data.camps.length}곳 표시 중`, false, 1500);
+        const mergedCamps = mergeCamps(goData.camps || [], kakaoData);
+        renderCamps(mergedCamps);
+        showStatus(`캠핑장 ${mergedCamps.length}곳 표시 중 (고캠핑 ${goData.camps.length}, 카카오 ${mergedCamps.length - goData.camps.length})`, false, 2000);
     } catch (err) {
         console.error(err);
-        showStatus('네트워크 오류로 캠핑장을 불러오지 못했습니다.', true);
+        showStatus('데이터를 불러오지 못했습니다.', true);
     } finally {
         isFetching = false;
     }
 }
 
 function renderCamps(camps) {
-    // 기존 마커 정리
     clusterer.clear();
     currentMarkers.forEach(({ marker }) => marker.setMap(null));
     currentMarkers = [];
 
     const newMarkers = camps.map((item) => {
         const latLng = new kakao.maps.LatLng(item.lat, item.lng);
-        const marker = new kakao.maps.Marker({ position: latLng });
+        const marker = new kakao.maps.Marker({ 
+            position: latLng,
+            image: item.source === 'gocamping' ? MARKER_IMG_GO : null
+        });
 
         kakao.maps.event.addListener(marker, 'click', () => {
             hideResults();
@@ -258,18 +315,18 @@ function moveToCurrentLocation() {
         navigator.geolocation.getCurrentPosition(
             (position) => {
                 const locPosition = new kakao.maps.LatLng(position.coords.latitude, position.coords.longitude);
-
                 if (!myLocationMarker) {
-                    myLocationMarker = new kakao.maps.Marker({ position: locPosition, map: map });
+                    myLocationMarker = new kakao.maps.Marker({ 
+                        position: locPosition, 
+                        map: map,
+                        image: new kakao.maps.MarkerImage('https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png', new kakao.maps.Size(32, 34))
+                    });
                 } else {
                     myLocationMarker.setPosition(locPosition);
                 }
-
                 if (map) map.panTo(locPosition);
             },
-            (error) => {
-                console.warn('GPS 위치를 가져올 수 없습니다.', error);
-            }
+            (error) => console.warn('GPS 위치를 가져올 수 없습니다.', error)
         );
     }
 }
@@ -288,36 +345,43 @@ async function searchCamping() {
     btn.innerText = '검색중';
 
     try {
+        // 고캠핑 검색
         const url = `${API_BASE}?type=keyword&keyword=${encodeURIComponent(rawInput)}`;
         const res = await fetch(url);
-        const data = await res.json();
+        const goData = res.ok ? await res.json() : { camps: [] };
 
-        if (!res.ok) {
-            alert(data.error || '검색 중 오류가 발생했습니다.');
-            hideResults();
-            return;
-        }
+        // 카카오 검색
+        const kakaoData = await new Promise((resolve) => {
+            const ps = new kakao.maps.services.Places();
+            ps.keywordSearch(rawInput, (data, status) => {
+                if (status === kakao.maps.services.Status.OK) {
+                    // 캠핑 관련 카테고리만 필터링 (선택 사항)
+                    resolve(data.filter(p => p.category_name.includes('캠핑') || p.category_name.includes('야영')));
+                } else resolve([]);
+            });
+        });
 
-        if (data.camps.length === 0) {
-            // 야영장 '이름' 검색으로는 못 찾은 경우 (예: "계방산"처럼 산/지역 이름인 경우)
-            // 카카오 장소검색으로 위치를 찾아서 그 주변 캠핑장을 대신 보여줌
+        const merged = mergeCamps(goData.camps || [], kakaoData);
+
+        if (merged.length === 0) {
             const fallbackFound = await searchByPlaceName(rawInput);
-            if (!fallbackFound) {
-                alert(`'${rawInput}' 검색 결과를 찾지 못했습니다.`);
-            }
+            if (!fallbackFound) alert(`'${rawInput}' 검색 결과를 찾지 못했습니다.`);
             hideResults();
             return;
         }
 
-        renderCamps(data.camps);
+        renderCamps(merged);
 
         const listEl = document.getElementById('search-results');
         listEl.innerHTML = '';
 
-        data.camps.forEach((item, index) => {
+        merged.forEach((item, index) => {
             const li = document.createElement('li');
             li.innerHTML = `
-                <div class="result-title">${item.name}</div>
+                <div style="display:flex; align-items:center;">
+                    <div class="result-title">${item.name}</div>
+                    <span class="result-source">${item.source === 'gocamping' ? '공식' : '지도'}</span>
+                </div>
                 <div class="result-sub">
                     <span class="result-category">${item.category}</span>
                     <span>${item.address}</span>
@@ -341,15 +405,13 @@ async function searchCamping() {
         listEl.style.display = 'block';
     } catch (err) {
         console.error(err);
-        alert('네트워크 오류로 검색하지 못했습니다.');
+        alert('검색 중 오류가 발생했습니다.');
     } finally {
         btn.disabled = false;
         btn.innerText = '검색';
     }
 }
 
-// 야영장명 검색이 실패했을 때, 입력한 단어를 지명/장소로 보고
-// 카카오 장소검색으로 좌표를 찾은 뒤 그 주변 캠핑장을 보여줌
 function searchByPlaceName(keyword) {
     return new Promise((resolve) => {
         const places = new kakao.maps.services.Places();
@@ -361,28 +423,13 @@ function searchByPlaceName(keyword) {
             const place = results[0];
             const lat = parseFloat(place.y);
             const lng = parseFloat(place.x);
-
             map.setCenter(new kakao.maps.LatLng(lat, lng));
             map.setLevel(7);
-
             showStatus(`'${keyword}' 근처 캠핑장을 찾았어요`, false, 2500);
-            await fetchCampsAt(lat, lng, 15000);
+            fetchCampsInView();
             resolve(true);
         });
     });
-}
-
-async function fetchCampsAt(lat, lng, radius) {
-    try {
-        const url = `${API_BASE}?type=location&mapX=${lng}&mapY=${lat}&radius=${radius}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (res.ok) {
-            renderCamps(data.camps);
-        }
-    } catch (err) {
-        console.error(err);
-    }
 }
 
 function hideResults() {
@@ -406,30 +453,40 @@ function openSheet(item) {
     const categoryEl = document.getElementById('camp-category');
     const addrEl = document.getElementById('camp-address');
     const telEl = document.getElementById('camp-tel');
+    const sourceEl = document.getElementById('source-tag');
     const btnRow = document.getElementById('reserve-btn-row');
 
     titleEl.innerText = item.name;
     categoryEl.innerText = item.category;
     addrEl.innerText = item.address;
-    telEl.innerText = item.tel ? `☎ ${item.tel}` : '';
+    telEl.innerText = item.tel ? `☎ ${item.tel}` : '전화번호 정보 없음';
+    
+    if (item.source === 'gocamping') {
+        sourceEl.innerText = '고캠핑 공식 데이터 (상세 정보 포함)';
+        sourceEl.style.color = '#2b8a3e';
+    } else {
+        sourceEl.innerText = '카카오맵 장소 데이터 (상세 정보 미제공)';
+        sourceEl.style.color = '#888';
+    }
 
     const buttons = [];
 
-    // 1순위: 고캠핑 API가 제공하는 실제 예약 페이지 (블로그/카페/SNS면 제외)
-    if (isReservationWorthyUrl(item.resveUrl)) {
-        buttons.push({
-            href: item.resveUrl,
-            label: item.resveCl ? `예약하기 (${item.resveCl})` : '예약 페이지 바로가기',
-            cls: 'primary',
-        });
-    } else if (isReservationWorthyUrl(item.homepage)) {
-        // 2순위: 공식 홈페이지 (블로그/카페/SNS면 제외)
-        buttons.push({ href: item.homepage, label: '홈페이지 바로가기', cls: 'primary' });
+    if (item.source === 'gocamping') {
+        if (isReservationWorthyUrl(item.resveUrl)) {
+            buttons.push({
+                href: item.resveUrl,
+                label: item.resveCl ? `예약하기 (${item.resveCl})` : '예약 페이지 바로가기',
+                cls: 'primary',
+            });
+        } else if (isReservationWorthyUrl(item.homepage)) {
+            buttons.push({ href: item.homepage, label: '홈페이지 바로가기', cls: 'primary' });
+        }
+    } else if (item.placeUrl) {
+        // 카카오 데이터인 경우 카카오맵 상세페이지 연결
+        buttons.push({ href: item.placeUrl, label: '카카오맵에서 상세보기', cls: 'kakao' });
     }
 
-    // 캠핏 / 땡큐캠핑에서 이름으로 바로 찾아보기
-    // (두 플랫폼 다 "이 캠핑장이 여기 있는지" 미리 알려주는 공개 API가 없어서,
-    //  정확한 예약 페이지 딥링크 대신 이름 검색 결과로 연결합니다)
+    // 공통: 외부 플랫폼 검색
     buttons.push({
         href: `https://www.google.com/search?q=${encodeURIComponent('site:camfit.co.kr ' + item.name)}`,
         label: '캠핏에서 찾기',
@@ -442,7 +499,6 @@ function openSheet(item) {
     });
 
     btnRow.innerHTML = '';
-    btnRow.style.flexDirection = 'column';
     buttons.forEach((b) => {
         const a = document.createElement('a');
         a.href = b.href;
