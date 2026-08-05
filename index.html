@@ -533,6 +533,7 @@ function openSheet(item) {
         href: `https://map.naver.com/p/search/${encodeURIComponent(item.name)}`,
         label: '네이버지도에서 보기 (예약 가능시 표시)',
         cls: 'secondary',
+        role: 'naverReservation',
     });
 
     btnRow.innerHTML = '';
@@ -579,6 +580,14 @@ async function upgradeReservationButtons(name, btnRow) {
             if (a) {
                 a.href = data.thankyoucamping;
                 a.innerText = '땡큐캠핑 예약페이지 바로가기';
+                a.className = 'reserve-btn primary';
+            }
+        }
+        if (data.naverReservation) {
+            const a = btnRow.querySelector('[data-role="naverReservation"]');
+            if (a) {
+                a.href = data.naverReservation;
+                a.innerText = '네이버예약으로 바로 예약하기';
                 a.className = 'reserve-btn primary';
             }
         }
