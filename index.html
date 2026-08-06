@@ -279,6 +279,9 @@ function reverseGeocodeRegion(lat, lng) {
 }
 
 // 주소 문자열을 정확한 위경도로 변환 (네이버 지오코더 - 표준 WGS84 좌표 보장)
+// 도로명/지번 주소를 둘 다 받아서, 더 상세한(번지 등이 살아있는) 쪽을 골라 돌려줌
+// - 지역검색 API가 주는 주소는 종종 잘려있거나 불완전해서, 지오코더로 재확인한
+//   주소가 더 정확함 (예: "강원 강릉시 연곡면"처럼 끊긴 도로명 대신 지번 "삼산리 52" 사용)
 function geocodeAddress(address) {
     return new Promise((resolve) => {
         if (!naver.maps.Service) { resolve(null); return; }
@@ -286,7 +289,19 @@ function geocodeAddress(address) {
             if (status !== naver.maps.Service.Status.OK) { resolve(null); return; }
             const addresses = response.v2 && response.v2.addresses;
             if (!addresses || !addresses.length) { resolve(null); return; }
-            resolve({ lat: parseFloat(addresses[0].y), lng: parseFloat(addresses[0].x) });
+            const item = addresses[0];
+
+            // 도로명 주소에 숫자(번지/건물번호)가 없으면 "끊긴" 주소로 보고 지번을 우선함
+            const roadHasNumber = item.roadAddress && /\d/.test(item.roadAddress);
+            const confirmedAddress = roadHasNumber
+                ? item.roadAddress
+                : (item.jibunAddress || item.roadAddress || address);
+
+            resolve({
+                lat: parseFloat(item.y),
+                lng: parseFloat(item.x),
+                address: confirmedAddress,
+            });
         });
     });
 }
@@ -310,11 +325,11 @@ async function fetchNaverSupplementaryCamps(officialCamps, lat, lng) {
                 return {
                     name: it.name,
                     category: '보완 검색 (고캠핑 미등록)',
-                    address: it.address,
+                    address: coord.address, // 지오코더로 재확인된, 더 완전한 주소 사용
                     lat: coord.lat,
                     lng: coord.lng,
                     tel: it.tel,
-                    placeUrl: `https://map.naver.com/p/search/${encodeURIComponent(it.address)}`,
+                    placeUrl: `https://map.naver.com/p/search/${encodeURIComponent(coord.address)}`,
                     source: 'naver',
                 };
             })
