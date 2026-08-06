@@ -24,7 +24,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const url = `https://naverapihub.apigw.ntruss.com/search/v1/local?query=${encodeURIComponent(keyword)}&display=5`;
+    const url = `https://naverapihub.apigw.ntruss.com/search/v1/local?query=${encodeURIComponent(keyword)}&display=15`;
     const searchRes = await fetch(url, {
       headers: {
         'X-NCP-APIGW-API-KEY-ID': clientId,
