@@ -6,8 +6,7 @@
     <title>내 전용 캠핑 지도</title>
     <!-- 네이버지도 SDK (지도 렌더링용) - ncpKeyId를 발급받은 Client ID로 교체하세요 -->
     <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=yjuis1thok&submodules=geocoder"></script>
-    <!-- 카카오맵 SDK (화면에 표시되지 않음, "고캠핑 미등록 캠핑장" 보완 검색 전용 - 네이버 API에는 동급 기능이 없어 유지) -->
-    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=0a2a1dd398016b31a421f8571610cb5a&libraries=services"></script>
+    <!-- "고캠핑 미등록 캠핑장" 보완 검색은 백엔드(/api/nearby-camps)를 통해 네이버 지역검색 API로 처리 -->
     <style>
         * { box-sizing: border-box; }
         body, html { margin:0; padding:0; height:100%; width:100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -172,7 +171,7 @@ let currentMarkers = []; // { marker, data }
 let fetchTimer = null;
 let isFetching = false;
 
-// 초록 = 고캠핑 API 정식 등록, 주황 = 카카오 보완검색으로 찾은(고캠핑 미등록) 캠핑장
+// 초록 = 고캠핑 API 정식 등록, 주황 = 네이버 보완검색으로 찾은(고캠핑 미등록) 캠핑장
 function makePinIcon(color) {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 30 40">
         <path d="M15 0C6.7 0 0 6.7 0 15c0 11 15 25 15 25s15-14 15-25C30 6.7 23.3 0 15 0z" fill="${color}"/>
@@ -248,8 +247,8 @@ async function fetchCampsInView() {
         renderCamps(data.camps);
         showStatus(`캠핑장 ${data.camps.length}곳 표시 중`, false, 1500);
 
-        // 고캠핑에 없는 캠핑장을 카카오 보완검색으로 채움 (화면엔 네이버맵만 보이고, 검색 로직만 카카오 이용)
-        const extra = await fetchKakaoSupplementaryCamps(data.camps, lat, lng, radius);
+        // 고캠핑에 없는 캠핑장을 네이버 보완검색으로 채움
+        const extra = await fetchNaverSupplementaryCamps(data.camps, lat, lng);
         if (extra.length) {
             addMarkers(extra, ORANGE_ICON);
         }
@@ -261,43 +260,71 @@ async function fetchCampsInView() {
     }
 }
 
-// 중심좌표+반경(m)으로부터 카카오 LatLngBounds를 직접 구성 (카카오 지도 객체 없이도 동작함)
-function makeKakaoBounds(lat, lng, radiusMeters) {
-    const dLat = radiusMeters / 111320;
-    const dLng = radiusMeters / (111320 * Math.cos(lat * Math.PI / 180));
-    const sw = new kakao.maps.LatLng(lat - dLat, lng - dLng);
-    const ne = new kakao.maps.LatLng(lat + dLat, lng + dLng);
-    return new kakao.maps.LatLngBounds(sw, ne);
+// 좌표를 넣으면 "시/군/구" 정도의 지역명을 돌려줌 (네이버 역지오코더 이용)
+function reverseGeocodeRegion(lat, lng) {
+    return new Promise((resolve) => {
+        if (!naver.maps.Service) { resolve(''); return; }
+        const coord = new naver.maps.LatLng(lat, lng);
+        naver.maps.Service.reverseGeocode({ coords: coord, orders: 'admcode' }, (status, response) => {
+            if (status !== naver.maps.Service.Status.OK) { resolve(''); return; }
+            const results = response.v2 && response.v2.results;
+            const region = results && results[0] && results[0].region;
+            if (!region) { resolve(''); return; }
+            const parts = [region.area1?.name, region.area2?.name].filter(Boolean);
+            resolve(parts.join(' '));
+        });
+    });
 }
 
-// 카카오 장소검색으로 "캠핑장" 키워드를 주어진 범위에서 찾고,
-// 이미 고캠핑 API에 있는 곳과 300m 이내로 겹치면 중복으로 보고 제외
-function fetchKakaoSupplementaryCamps(officialCamps, lat, lng, radius) {
+// 주소 문자열을 정확한 위경도로 변환 (네이버 지오코더 - 표준 WGS84 좌표 보장)
+function geocodeAddress(address) {
     return new Promise((resolve) => {
-        if (typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.services) { resolve([]); return; }
-        const places = new kakao.maps.services.Places();
-        const bounds = makeKakaoBounds(lat, lng, radius);
-        places.keywordSearch('캠핑장', (results, status) => {
-            if (status !== kakao.maps.services.Status.OK) {
-                resolve([]);
-                return;
-            }
-            const extra = results
-                .filter((r) => (r.category_name || '').includes('캠핑')) // 학원/카페 등 이름에만 '캠핑'이 우연히 매칭된 오탐 제거
-                .map((r) => ({
-                    name: r.place_name,
-                    category: '보완 검색 (고캠핑 미등록)',
-                    address: r.road_address_name || r.address_name || '',
-                    lat: parseFloat(r.y),
-                    lng: parseFloat(r.x),
-                    tel: r.phone || '',
-                    placeUrl: r.place_url || '',
-                    source: 'kakao',
-                }))
-                .filter((k) => !officialCamps.some((o) => distanceMeters(o.lat, o.lng, k.lat, k.lng) < 300));
-            resolve(extra);
-        }, { bounds });
+        if (!naver.maps.Service) { resolve(null); return; }
+        naver.maps.Service.geocode({ query: address }, (status, response) => {
+            if (status !== naver.maps.Service.Status.OK) { resolve(null); return; }
+            const addresses = response.v2 && response.v2.addresses;
+            if (!addresses || !addresses.length) { resolve(null); return; }
+            resolve({ lat: parseFloat(addresses[0].y), lng: parseFloat(addresses[0].x) });
+        });
     });
+}
+
+// 네이버 지역검색으로 "캠핑장" 키워드를 현재 지역 범위에서 찾고,
+// 각 결과의 주소를 지오코더로 재변환해 정확한 좌표를 구함.
+// 이미 고캠핑 API에 있는 곳과 300m 이내로 겹치면 중복으로 보고 제외.
+async function fetchNaverSupplementaryCamps(officialCamps, lat, lng) {
+    try {
+        const region = await reverseGeocodeRegion(lat, lng);
+        const keyword = region ? `${region} 캠핑장` : '캠핑장';
+
+        const res = await fetch(`/api/nearby-camps?keyword=${encodeURIComponent(keyword)}`);
+        const data = await res.json();
+        if (!res.ok || !data.items) return [];
+
+        const geocoded = await Promise.all(
+            data.items.map(async (it) => {
+                const coord = await geocodeAddress(it.address);
+                if (!coord) return null;
+                return {
+                    name: it.name,
+                    category: '보완 검색 (고캠핑 미등록)',
+                    address: it.address,
+                    lat: coord.lat,
+                    lng: coord.lng,
+                    tel: it.tel,
+                    placeUrl: `https://map.naver.com/p/search/${encodeURIComponent(it.name)}`,
+                    source: 'naver',
+                };
+            })
+        );
+
+        return geocoded
+            .filter(Boolean)
+            .filter((k) => !officialCamps.some((o) => distanceMeters(o.lat, o.lng, k.lat, k.lng) < 300));
+    } catch (err) {
+        console.error('보완 검색 실패:', err);
+        return [];
+    }
 }
 
 function renderCamps(camps) {
@@ -451,7 +478,7 @@ async function fetchCampsAt(lat, lng, radius) {
         const data = await res.json();
         if (res.ok) {
             renderCamps(data.camps);
-            const extra = await fetchKakaoSupplementaryCamps(data.camps, lat, lng, radius);
+            const extra = await fetchNaverSupplementaryCamps(data.camps, lat, lng);
             if (extra.length) {
                 addMarkers(extra, ORANGE_ICON);
             }
@@ -491,7 +518,7 @@ function openSheet(item) {
 
     const buttons = [];
 
-    if (item.source === 'kakao') {
+    if (item.source === 'naver') {
         // 고캠핑 API에 없는, 보완검색으로 찾은 캠핑장
         addrEl.innerText += ' (고캠핑 미등록 · 보완 검색 정보)';
         if (item.placeUrl) {
