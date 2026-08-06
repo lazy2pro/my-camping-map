@@ -56,6 +56,7 @@ export default async function handler(req, res) {
 
     const debug = req.query.debug === '1';
     const result = { camfit: null, thankyoucamping: null };
+    const candidateFound = { camfit: false, thankyoucamping: false }; // 검증 여부와 무관하게, 후보 링크 자체가 있었는지
     const debugInfo = { allLinks: [...new Set(items.map((it) => it.link))] };
 
     // 캠핏/땡큐캠핑 검증도 병렬로 동시 실행
@@ -67,6 +68,7 @@ export default async function handler(req, res) {
           return;
         }
 
+        candidateFound[key] = true;
         const verifyResult = await pageContainsName(found.link, name);
         const isDetailPage = cfg.detailPath.test(found.link);
         // 내용 검증 성공 -> 확실히 신뢰
@@ -92,7 +94,7 @@ export default async function handler(req, res) {
     if (!debug) {
       res.setHeader('Cache-Control', 's-maxage=604800, stale-while-revalidate=86400');
     }
-    return res.status(200).json(debug ? { ...result, debug: debugInfo } : result);
+    return res.status(200).json(debug ? { ...result, candidateFound, debug: debugInfo } : { ...result, candidateFound });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
