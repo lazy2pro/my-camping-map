@@ -52,7 +52,7 @@ export default async function handler(req, res) {
     const items = allItems.map((it) => ({ ...it, link: (it.link || '').replace(/&amp;/g, '&') }));
 
     const debug = req.query.debug === '1';
-    const result = { camfit: null, thankyoucamping: null };
+    const result = { _codeVersion: 'naver-allsearch-v1', camfit: null, thankyoucamping: null };
     const debugInfo = { allLinks: [...new Set(items.map((it) => it.link))] };
 
     for (const [key, cfg] of Object.entries(TARGET_SITES)) {
