@@ -13,8 +13,11 @@
 const TARGET_SITES = {
   // pattern: 해당 도메인 매칭 / detailPath: "개별 캠핑장 상세페이지"로 보이는 URL 패턴
   // (봇 차단으로 내용 검증이 불가능할 때, 이 패턴이면 신뢰하고 통과시킴)
+  //
+  // 주의: "땡큐캠핑"의 실제 도메인은 thankyoucamping.com이 아니라 thankqcamping.com("Thank Q")임.
+  // (실사용자 확인 결과로 발견 - 이전 버전은 잘못된 도메인을 찾고 있어서 항상 못 찾았음)
   camfit: { pattern: /camfit\.co\.kr/i, detailPath: /\/camp\/[a-z0-9]+/i },
-  thankyoucamping: { pattern: /thankyoucamping\.com/i, detailPath: /\/(place|camp|site)\/[a-z0-9]+/i },
+  thankyoucamping: { pattern: /thankqcamping\.com/i, detailPath: /cseq=\d+/i },
 };
 
 export default async function handler(req, res) {
