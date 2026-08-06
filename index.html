@@ -603,28 +603,35 @@ function openSheet(item) {
     // 그 경우 하단에 중복되는 '네이버지도에서 보기' 버튼은 생략한다.
     let naverMapButtonNeeded = true;
 
+    // 고캠핑의 resveUrl/homepage가 이미 캠핏·땡큐캠핑 링크라면 미리 찾아둔다.
+    // - 이 링크를 '예약하기/홈페이지' 버튼과 '캠핏/땡큐캠핑' 버튼에 중복 표시하지 않기 위해서(아래에서 사용)
+    // - 구글 검색을 거치지 않고 바로 연결하기 위해서
+    const directLinks = detectDirectSiteLinks(item);
+    const primaryCandidateUrl = isReservationWorthyUrl(item.resveUrl)
+        ? item.resveUrl
+        : (isReservationWorthyUrl(item.homepage) ? item.homepage : null);
+    // 예약하기/홈페이지 버튼의 링크가 캠핏이나 땡큐캠핑 버튼과 완전히 같은 결과라면,
+    // 같은 링크를 두 번 보여줄 필요 없이 캠핏/땡큐캠핑 버튼 하나만 남긴다.
+    const primaryDuplicatesSiteButton =
+        !!primaryCandidateUrl &&
+        (primaryCandidateUrl === directLinks.camfit || primaryCandidateUrl === directLinks.thankyoucamping);
+
     if (item.source === 'naver') {
         addrEl.innerText += ' (고캠핑 미등록 · 보완 검색 정보)';
         if (item.placeUrl) {
             buttons.push({ href: item.placeUrl, label: '상세정보 보기', cls: 'primary' });
             naverMapButtonNeeded = false;
         }
-    } else if (isReservationWorthyUrl(item.resveUrl)) {
+    } else if (!primaryDuplicatesSiteButton && isReservationWorthyUrl(item.resveUrl)) {
         buttons.push({
             href: item.resveUrl,
             label: item.resveCl ? `예약하기 (${item.resveCl})` : '예약 페이지 바로가기',
             cls: 'primary',
             role: 'official',
         });
-    } else if (isReservationWorthyUrl(item.homepage)) {
+    } else if (!primaryDuplicatesSiteButton && isReservationWorthyUrl(item.homepage)) {
         buttons.push({ href: item.homepage, label: '홈페이지 바로가기', cls: 'primary' });
     }
-
-    // 고캠핑의 resveUrl/homepage가 이미 캠핏·땡큐캠핑 링크라면, 구글 검색을 거치지 않고
-    // 바로 그 링크로 연결한다. 아직 알 수 없는 쪽만 '확인 중' 상태로 표시했다가
-    // upgradeReservationButtons()의 검증 결과로 채운다 (검색 결과 페이지로 먼저
-    // 보내던 기존 방식은 대부분 불필요한 경유였다).
-    const directLinks = detectDirectSiteLinks(item);
 
     if (directLinks.camfit) {
         buttons.push({
@@ -647,7 +654,7 @@ function openSheet(item) {
         buttons.push({
             href: directLinks.thankyoucamping,
             label: '땡큐캠핑 예약페이지 바로가기',
-            cls: 'secondary',
+            cls: buttons.length === 0 ? 'primary' : 'secondary',
             role: 'thankyoucamping',
         });
     } else {
