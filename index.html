@@ -329,7 +329,7 @@ async function fetchNaverSupplementaryCamps(officialCamps, lat, lng) {
                     lat: coord.lat,
                     lng: coord.lng,
                     tel: it.tel,
-                    placeUrl: `https://map.naver.com/p/search/${encodeURIComponent(coord.address)}`,
+                    placeUrl: `https://map.naver.com/p/search/${encodeURIComponent(it.name)}`,
                     source: 'naver',
                 };
             })
