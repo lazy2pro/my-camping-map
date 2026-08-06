@@ -478,7 +478,12 @@ async function searchByLandmarkName(keyword) {
         const data = await res.json();
         if (!res.ok || !data.items || !data.items.length) return false;
 
-        const coord = await geocodeAddress(data.items[0].address);
+        // 검색어가 이름에 그대로 포함된 결과를 최우선으로 (예: "계방산" 검색 시
+        // "계방산오토캠핑장"을 관련없는 다른 결과보다 먼저 선택)
+        const best =
+            data.items.find((it) => it.name.includes(keyword)) || data.items[0];
+
+        const coord = await geocodeAddress(best.address);
         if (!coord) return false;
 
         map.setCenter(new naver.maps.LatLng(coord.lat, coord.lng));
@@ -595,20 +600,17 @@ function openSheet(item) {
     sheet.classList.add('active');
     gpsBtn.classList.add('shifted');
 
-    // 고캠핑 미등록(보완검색) 캠핑장은 이름이 불안정(구역명 조합 등)할 수 있어서,
-    // 내용까지 실제로 검증된 예약링크만 인정하도록 strict 모드로 확인
-    upgradeReservationButtons(item.name, btnRow, item.source === 'naver');
+    upgradeReservationButtons(item.name, btnRow);
 }
 
 // 마커를 빠르게 여러 번 클릭했을 때, 이전 요청 결과가 지금 열려있는(다른) 시트에
 // 잘못 반영되지 않도록 세대(generation) 토큰으로 방지
 let sheetGeneration = 0;
 
-async function upgradeReservationButtons(name, btnRow, strict) {
+async function upgradeReservationButtons(name, btnRow) {
     const myGen = ++sheetGeneration;
     try {
-        const strictParam = strict ? '&strict=1' : '';
-        const res = await fetch(`/api/reservation-link?name=${encodeURIComponent(name)}${strictParam}`);
+        const res = await fetch(`/api/reservation-link?name=${encodeURIComponent(name)}`);
         const data = await res.json();
         if (!res.ok || myGen !== sheetGeneration) return; // 이미 다른 캠핑장 시트로 넘어갔으면 무시
 
