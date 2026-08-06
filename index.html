@@ -164,8 +164,46 @@ let currentMarkers = [];
 let fetchTimer = null;
 let currentFetchController = null;
 
-// 캐시 객체: 반복적인 주소 지오코딩 API 요청 방지
+// 캐시 객체: 반복적인 주소 지오코딩 API 요청 방지 (최대 500개, 초과 시 오래된 항목부터 제거)
 const geocodeCache = new Map();
+const GEOCODE_CACHE_LIMIT = 500;
+function cacheGeocode(address, result) {
+    geocodeCache.set(address, result);
+    if (geocodeCache.size > GEOCODE_CACHE_LIMIT) {
+        geocodeCache.delete(geocodeCache.keys().next().value);
+    }
+}
+
+// 캐시 객체: 동일/인접 좌표에 대한 반복 캠핑장 조회 API 요청 방지 (60초 TTL, 최대 100개)
+const campsCache = new Map();
+const CAMPS_CACHE_TTL_MS = 60000;
+const CAMPS_CACHE_LIMIT = 100;
+function campsCacheKey(lat, lng, radius) {
+    // 좌표를 약 1km 격자로 반올림해 살짝 다른 위치에서도 캐시가 재사용되도록 함
+    const gridLat = Math.round(lat * 100) / 100;
+    const gridLng = Math.round(lng * 100) / 100;
+    return `${gridLat},${gridLng},${radius}`;
+}
+async function fetchCampsData(lat, lng, radius, signal) {
+    const key = campsCacheKey(lat, lng, radius);
+    const cached = campsCache.get(key);
+    if (cached && (Date.now() - cached.ts) < CAMPS_CACHE_TTL_MS) {
+        return cached.data;
+    }
+    const url = `${API_BASE}?type=location&mapX=${lng}&mapY=${lat}&radius=${radius}`;
+    const res = await fetch(url, signal ? { signal } : undefined);
+    const data = await res.json();
+    if (!res.ok) {
+        const err = new Error(data.error || '캠핑장 정보를 불러오지 못했습니다.');
+        err.isApiError = true;
+        throw err;
+    }
+    campsCache.set(key, { data, ts: Date.now() });
+    if (campsCache.size > CAMPS_CACHE_LIMIT) {
+        campsCache.delete(campsCache.keys().next().value);
+    }
+    return data;
+}
 
 function makePinIcon(color) {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 30 40">
@@ -235,14 +273,7 @@ async function fetchCampsInView() {
     const radius = calcRadiusFromZoom();
 
     try {
-        const url = `${API_BASE}?type=location&mapX=${lng}&mapY=${lat}&radius=${radius}`;
-        const res = await fetch(url, { signal: currentFetchController.signal });
-        const data = await res.json();
-
-        if (!res.ok) {
-            showStatus(data.error || '캠핑장 정보를 불러오지 못했습니다.', true);
-            return;
-        }
+        const data = await fetchCampsData(lat, lng, radius, currentFetchController.signal);
 
         renderCamps(data.camps);
         showStatus(`캠핑장 ${data.camps.length}곳 표시 중`, false, 1500);
@@ -254,7 +285,7 @@ async function fetchCampsInView() {
     } catch (err) {
         if (err.name === 'AbortError') return;
         console.error(err);
-        showStatus('네트워크 오류로 캠핑장을 불러오지 못했습니다.', true);
+        showStatus(err.isApiError ? err.message : '네트워크 오류로 캠핑장을 불러오지 못했습니다.', true);
     }
 }
 
@@ -282,13 +313,13 @@ function geocodeAddress(address) {
         if (!naver.maps.Service) { resolve(null); return; }
         naver.maps.Service.geocode({ query: address }, (status, response) => {
             if (status !== naver.maps.Service.Status.OK) { 
-                geocodeCache.set(address, null);
+                cacheGeocode(address, null);
                 resolve(null); 
                 return; 
             }
             const addresses = response.v2 && response.v2.addresses;
             if (!addresses || !addresses.length) { 
-                geocodeCache.set(address, null);
+                cacheGeocode(address, null);
                 resolve(null); 
                 return; 
             }
@@ -304,7 +335,7 @@ function geocodeAddress(address) {
                 address: confirmedAddress,
             };
 
-            geocodeCache.set(address, result);
+            cacheGeocode(address, result);
             resolve(result);
         });
     });
@@ -319,8 +350,10 @@ async function fetchNaverSupplementaryCamps(officialCamps, lat, lng, signal) {
         const data = await res.json();
         if (!res.ok || !data.items) return [];
 
+        // 지오코딩은 좌표 확정을 위해 건당 1회 외부 API 호출이 발생하므로,
+        // 팬(pan)마다 최대 15건을 모두 조회하지 않고 상위 8건으로 제한한다.
         const geocoded = await Promise.all(
-            data.items.map(async (it) => {
+            data.items.slice(0, 8).map(async (it) => {
                 const coord = await geocodeAddress(it.address);
                 if (!coord) return null;
                 return {
@@ -508,15 +541,11 @@ async function searchByLandmarkName(keyword) {
 
 async function fetchCampsAt(lat, lng, radius) {
     try {
-        const url = `${API_BASE}?type=location&mapX=${lng}&mapY=${lat}&radius=${radius}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (res.ok) {
-            renderCamps(data.camps);
-            const extra = await fetchNaverSupplementaryCamps(data.camps, lat, lng);
-            if (extra.length) {
-                addMarkers(extra, ORANGE_ICON);
-            }
+        const data = await fetchCampsData(lat, lng, radius);
+        renderCamps(data.camps);
+        const extra = await fetchNaverSupplementaryCamps(data.camps, lat, lng);
+        if (extra.length) {
+            addMarkers(extra, ORANGE_ICON);
         }
     } catch (err) {
         console.error(err);
