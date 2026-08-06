@@ -43,8 +43,27 @@ export default async function handler(req, res) {
     }
 
     const url = `${baseUrl}/${endpoint}?${params.toString()}`;
-    const apiRes = await fetch(url);
-    const rawText = await apiRes.text();
+
+    // 고캠핑 API 서버와의 연결이 가끔 일시적으로 실패하는 경우가 있어, 한 번 자동 재시도함
+    let apiRes;
+    let rawText;
+    let lastError;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        apiRes = await fetch(url);
+        rawText = await apiRes.text();
+        lastError = null;
+        break;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    if (lastError) {
+      return res.status(502).json({
+        error: '고캠핑 API 서버 연결에 실패했습니다 (일시적인 문제일 수 있습니다. 잠시 후 다시 시도해주세요).',
+        detail: lastError.message,
+      });
+    }
 
     let data;
     try {
@@ -69,18 +88,18 @@ export default async function handler(req, res) {
     // "법인명 패턴(주식회사/㈜)" + "연락처 정보가 전부 비어있음" 두 조건을 동시에 만족하는 경우만
     // 걸러냄 (진짜 캠핑장인데 법인명이 특이한 경우까지 잘못 거르지 않도록 보수적으로 적용)
     const CORP_PATTERN = /(주식회사|㈜|\(주\))/;
-    const isLikelyNotACampsite = (it) => {
-      const isCorpName = CORP_PATTERN.test(it.facltNm || '');
-      const hasNoContactInfo = !it.tel && !it.homepage && !it.resveUrl && !it.firstImageUrl;
+    const isLikelyNotACampsite = (camp) => {
+      const isCorpName = CORP_PATTERN.test(camp.name || '');
+      // trim/정제까지 끝난 값 기준으로 판단 (원본 필드에 공백만 있는 경우 등의 오탐 방지)
+      const hasNoContactInfo = !camp.tel && !camp.homepage && !camp.resveUrl && !camp.image;
       return isCorpName && hasNoContactInfo;
     };
 
     const camps = items
       .filter((it) => it.mapX && it.mapY)
-      .filter((it) => !isLikelyNotACampsite(it))
       .map((it) => ({
         id: it.contentId,
-        name: it.facltNm,
+        name: (it.facltNm || '').trim(),
         category: it.induty || '',
         address: [it.addr1, it.addr2].filter(Boolean).join(' '),
         lat: parseFloat(it.mapY),
@@ -89,8 +108,9 @@ export default async function handler(req, res) {
         homepage: (it.homepage || '').replace(/<[^>]*>/g, '').trim(), // 종종 <a> 태그로 옴
         resveUrl: (it.resveUrl || '').replace(/<[^>]*>/g, '').trim(), // 예약 페이지 (캠핏/땡큐캠핑 등으로 연결되는 경우 많음)
         resveCl: it.resveCl || '', // 예약 구분 (예: 온라인실시간예약)
-        image: it.firstImageUrl || '',
-      }));
+        image: (it.firstImageUrl || '').trim(),
+      }))
+      .filter((camp) => !isLikelyNotACampsite(camp));
 
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
     return res.status(200).json({ count: camps.length, camps });
