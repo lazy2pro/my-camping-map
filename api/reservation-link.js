@@ -35,12 +35,17 @@ export default async function handler(req, res) {
       });
     }
 
-    // 검색어를 두 번(예약/캠핑) 돌려서 후보군을 넓힘 - 병렬로 동시 실행해서 속도 개선
+    // 검색어를 여러 버전으로 돌려서 후보군을 넓힘 - 병렬로 동시 실행해서 속도 개선.
+    // 고캠핑 API의 이름이 "따봄"처럼 짧게 등록되어 있어도, 실제 플랫폼엔 "따봄캠핑장"처럼
+    // 정식 명칭으로 올라와 있는 경우가 많아서, "이름+캠핑장" 버전도 같이 검색함
+    // (이렇게 하면 이름이 겹치는 다른 지역 캠핑장과의 오매칭도 자연히 줄어듦)
     const headers = {
       'X-NCP-APIGW-API-KEY-ID': clientId,
       'X-NCP-APIGW-API-KEY': clientSecret,
     };
+    const hasCampSuffix = /(캠핑장|야영장)$/.test(name);
     const queries = [`${name} 예약`, `${name} 캠핑`];
+    if (!hasCampSuffix) queries.push(`${name}캠핑장 예약`);
     const searchResults = await Promise.all(
       queries.map(async (q) => {
         const searchUrl = `https://naverapihub.apigw.ntruss.com/search/v1/webkr?query=${encodeURIComponent(q)}&display=30&format=json`;
@@ -72,6 +77,13 @@ export default async function handler(req, res) {
       const snippet = normalizeText(it.title) + normalizeText(it.description);
       return regionTokens.some((t) => snippet.includes(normalizeText(t)));
     };
+    // "이름+캠핑장/야영장" 형태가 스니펫에 정확히 들어있는지 - 이게 가장 강한 신호
+    const fullCampName = hasCampSuffix ? normalizeText(name) : normalizeText(name + '캠핑장');
+    const fullCampNameAlt = hasCampSuffix ? null : normalizeText(name + '야영장');
+    const snippetMatchesFullName = (it) => {
+      const snippet = normalizeText(it.title) + normalizeText(it.description);
+      return snippet.includes(fullCampName) || (fullCampNameAlt && snippet.includes(fullCampNameAlt));
+    };
 
     // 캠핏/땡큐캠핑 검증과, 고캠핑 API가 준 공식 예약링크(officialUrl) 생존 확인을 모두 병렬 실행
     const [, officialValid] = await Promise.all([
@@ -83,22 +95,22 @@ export default async function handler(req, res) {
             return;
           }
 
-          // 지역명이 스니펫에 언급된 후보를 최우선으로 선택 (없으면 그냥 첫 후보)
+          // 우선순위: 1) "이름+캠핑장" 정확 매칭  2) 지역명 일치  3) 그냥 첫 후보
+          const fullNameMatched = domainMatches.find((it) => snippetMatchesFullName(it));
           const regionMatched = domainMatches.find((it) => snippetMatchesRegion(it) === true);
-          const found = regionMatched || domainMatches[0];
+          const found = fullNameMatched || regionMatched || domainMatches[0];
+          const nameConfirmed = !!fullNameMatched;
           const regionOk = snippetMatchesRegion(found); // true/false/null(정보없음)
 
           candidateFound[key] = true;
           const verifyResult = await pageContainsName(found.link, name);
           const isDetailPage = cfg.detailPath.test(found.link);
-          // 내용 검증 성공 -> 확실히 신뢰
-          // 봇 차단(403 등)으로 검증 자체가 불가능했는데, URL이 "개별 캠핑장 상세페이지" 패턴이고
-          // + (지역 정보가 없거나, 있다면 스니펫의 지역명도 일치)하면 신뢰하고 통과시킴.
-          // 지역명이 확실히 불일치(regionOk === false)하면 절대 통과시키지 않음 (오매칭 방지)
+          // 신뢰 조건: 내용 검증 성공 -> 확실히 신뢰.
+          // 봇 차단으로 검증 자체가 불가능했던 경우엔, "이름+캠핑장" 정확 매칭이거나
+          // (지역 정보가 없거나 지역명이 일치)해야만 통과시킴. 지역명이 확실히
+          // 불일치하면(regionOk===false) "이름+캠핑장" 매칭이어도 통과 안 시킴 (이중 안전장치)
           const trustedFallback = !verifyResult.checked && isDetailPage && regionOk !== false;
 
-          // 지역명이 확실히 다르면(regionOk === false), 내용 검증(verified)에 통과했더라도
-          // 신뢰하지 않음 - 이름이 부분적으로 겹치는 다른 지역 캠핑장일 가능성이 높음
           if (regionOk !== false && (verifyResult.verified || trustedFallback)) {
             result[key] = found.link;
           }
@@ -107,6 +119,7 @@ export default async function handler(req, res) {
               candidateFound: true,
               candidateLink: found.link,
               isDetailPage,
+              nameConfirmed,
               regionOk,
               trustedFallback,
               ...verifyResult,
