@@ -65,8 +65,19 @@ export default async function handler(req, res) {
     let items = (body.items && body.items.item) || [];
     if (!Array.isArray(items)) items = [items]; // 결과가 1건이면 배열이 아니라 객체로 옴
 
+    // 고캠핑 API 원본 데이터에 실제 캠핑장이 아닌 항목(여행사 법인 등)이 섞여 있는 경우가 있음.
+    // "법인명 패턴(주식회사/㈜)" + "연락처 정보가 전부 비어있음" 두 조건을 동시에 만족하는 경우만
+    // 걸러냄 (진짜 캠핑장인데 법인명이 특이한 경우까지 잘못 거르지 않도록 보수적으로 적용)
+    const CORP_PATTERN = /(주식회사|㈜|\(주\))/;
+    const isLikelyNotACampsite = (it) => {
+      const isCorpName = CORP_PATTERN.test(it.facltNm || '');
+      const hasNoContactInfo = !it.tel && !it.homepage && !it.resveUrl && !it.firstImageUrl;
+      return isCorpName && hasNoContactInfo;
+    };
+
     const camps = items
       .filter((it) => it.mapX && it.mapY)
+      .filter((it) => !isLikelyNotACampsite(it))
       .map((it) => ({
         id: it.contentId,
         name: it.facltNm,
