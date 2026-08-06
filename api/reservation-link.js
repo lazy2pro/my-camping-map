@@ -22,7 +22,7 @@ const TARGET_SITES = {
 
 export default async function handler(req, res) {
   try {
-    const { name, officialUrl } = req.query;
+    const { name, officialUrl, region } = req.query;
     if (!name) {
       return res.status(400).json({ error: 'name 파라미터가 필요합니다.' });
     }
@@ -62,29 +62,55 @@ export default async function handler(req, res) {
     const candidateFound = { camfit: false, thankyoucamping: false }; // 검증 여부와 무관하게, 후보 링크 자체가 있었는지
     const debugInfo = { allLinks: [...new Set(items.map((it) => it.link))] };
 
+    // 주소에서 넘어온 지역명(예: "경기 하남시")을 토큰으로 분리 - 검색결과 스니펫에
+    // 이 지역명이 언급되는지로 "이름만 비슷한 다른 지역 캠핑장"을 걸러내는 데 씀
+    // (예: "따봄"(경기 하남) 검색 시 이름이 겹치는 "따봄스테이"(충북 괴산)를 오인하는 걸 방지)
+    const regionTokens = (region || '').split(/\s+/).filter((t) => t.length >= 2);
+    const normalizeText = (s) => (s || '').replace(/<[^>]*>/g, '').replace(/\s+/g, '').toLowerCase();
+    const snippetMatchesRegion = (it) => {
+      if (!regionTokens.length) return null; // 지역 정보 자체가 없으면 판단 보류(null)
+      const snippet = normalizeText(it.title) + normalizeText(it.description);
+      return regionTokens.some((t) => snippet.includes(normalizeText(t)));
+    };
+
     // 캠핏/땡큐캠핑 검증과, 고캠핑 API가 준 공식 예약링크(officialUrl) 생존 확인을 모두 병렬 실행
     const [, officialValid] = await Promise.all([
       Promise.all(
         Object.entries(TARGET_SITES).map(async ([key, cfg]) => {
-          const found = items.find((it) => cfg.pattern.test(it.link));
-          if (!found) {
+          const domainMatches = items.filter((it) => cfg.pattern.test(it.link));
+          if (!domainMatches.length) {
             if (debug) debugInfo[key] = { candidateFound: false };
             return;
           }
+
+          // 지역명이 스니펫에 언급된 후보를 최우선으로 선택 (없으면 그냥 첫 후보)
+          const regionMatched = domainMatches.find((it) => snippetMatchesRegion(it) === true);
+          const found = regionMatched || domainMatches[0];
+          const regionOk = snippetMatchesRegion(found); // true/false/null(정보없음)
 
           candidateFound[key] = true;
           const verifyResult = await pageContainsName(found.link, name);
           const isDetailPage = cfg.detailPath.test(found.link);
           // 내용 검증 성공 -> 확실히 신뢰
-          // 봇 차단(403 등)으로 검증 자체가 불가능했는데, URL이 "개별 캠핑장 상세페이지" 패턴이면
-          // 신뢰도가 충분히 높다고 보고 통과시킴 (완전 미확인 상태로 링크 주는 것보단 안전한 절충)
-          const trustedFallback = !verifyResult.checked && isDetailPage;
+          // 봇 차단(403 등)으로 검증 자체가 불가능했는데, URL이 "개별 캠핑장 상세페이지" 패턴이고
+          // + (지역 정보가 없거나, 있다면 스니펫의 지역명도 일치)하면 신뢰하고 통과시킴.
+          // 지역명이 확실히 불일치(regionOk === false)하면 절대 통과시키지 않음 (오매칭 방지)
+          const trustedFallback = !verifyResult.checked && isDetailPage && regionOk !== false;
 
-          if (verifyResult.verified || trustedFallback) {
+          // 지역명이 확실히 다르면(regionOk === false), 내용 검증(verified)에 통과했더라도
+          // 신뢰하지 않음 - 이름이 부분적으로 겹치는 다른 지역 캠핑장일 가능성이 높음
+          if (regionOk !== false && (verifyResult.verified || trustedFallback)) {
             result[key] = found.link;
           }
           if (debug) {
-            debugInfo[key] = { candidateFound: true, candidateLink: found.link, isDetailPage, trustedFallback, ...verifyResult };
+            debugInfo[key] = {
+              candidateFound: true,
+              candidateLink: found.link,
+              isDetailPage,
+              regionOk,
+              trustedFallback,
+              ...verifyResult,
+            };
           }
         })
       ),
