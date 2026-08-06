@@ -64,7 +64,8 @@ export default async function handler(req, res) {
       return true;
     });
 
-    res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
+    // 30분 -> 60분: 네이버 지역검색 결과도 자주 바뀌지 않으므로 캐시를 늘려 호출 빈도를 낮춘다.
+    res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=7200');
     return res.status(200).json({ items: dedupedItems });
   } catch (err) {
     return res.status(500).json({ error: err.message });

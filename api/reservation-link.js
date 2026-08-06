@@ -42,27 +42,46 @@ export default async function handler(req, res) {
     const hasCampSuffix = /(캠핑장|야영장)$/.test(cleanName);
     const fullName = hasCampSuffix ? cleanName : `${cleanName}캠핑장`;
 
-    const queries = [];
-    if (region) queries.push(`${region} ${fullName}`);
-    if (!hasCampSuffix) queries.push(`${fullName} 예약`);
-    queries.push(`${cleanName} 예약`, `${cleanName} 캠핑`);
+    // 검색 전략을 2단계로 나눈다: 대부분의 캠핑장은 1차 질의(가장 구체적인 것)만으로
+    // camfit/땡큐캠핑 도메인이 모두 검색되므로, 그 경우 2차(폴백) 질의는 생략해
+    // 네이버 검색 API 호출 횟수(쿼터)를 절반 가까이 줄인다.
+    const primaryQueries = [];
+    if (region) primaryQueries.push(`${region} ${fullName}`);
+    if (!hasCampSuffix) primaryQueries.push(`${fullName} 예약`);
+    if (primaryQueries.length === 0) primaryQueries.push(`${fullName} 예약`);
 
-    const searchResults = await Promise.all(
-      queries.map(async (q) => {
-        try {
-          const searchUrl = `https://naverapihub.apigw.ntruss.com/search/v1/webkr?query=${encodeURIComponent(q)}&display=20&format=json`;
-          const searchRes = await fetchWithTimeout(searchUrl, { headers }, 3000);
-          const searchData = await searchRes.json();
-          return { ok: searchRes.ok, data: searchData };
-        } catch (e) {
-          return { ok: false, data: { error: e.message } };
-        }
-      })
+    const fallbackQueries = [`${cleanName} 예약`, `${cleanName} 캠핑`].filter(
+      (q) => !primaryQueries.includes(q)
     );
 
-    const validResults = searchResults.filter((r) => r.ok && r.data && r.data.items);
-    const allItems = validResults.flatMap((r) => r.data.items || []);
-    const items = allItems.map((it) => ({ ...it, link: (it.link || '').replace(/&amp;/g, '&') }));
+    async function runQueries(queryList) {
+      const searchResults = await Promise.all(
+        queryList.map(async (q) => {
+          try {
+            const searchUrl = `https://naverapihub.apigw.ntruss.com/search/v1/webkr?query=${encodeURIComponent(q)}&display=20&format=json`;
+            const searchRes = await fetchWithTimeout(searchUrl, { headers }, 3000);
+            const searchData = await searchRes.json();
+            return { ok: searchRes.ok, data: searchData };
+          } catch (e) {
+            return { ok: false, data: { error: e.message } };
+          }
+        })
+      );
+      const validResults = searchResults.filter((r) => r.ok && r.data && r.data.items);
+      const allItems = validResults.flatMap((r) => r.data.items || []);
+      return allItems.map((it) => ({ ...it, link: (it.link || '').replace(/&amp;/g, '&') }));
+    }
+
+    let items = await runQueries(primaryQueries);
+
+    const hasDomainMatch = (siteKey) => items.some((it) => TARGET_SITES[siteKey].pattern.test(it.link));
+    const needsFallback =
+      fallbackQueries.length > 0 && (!hasDomainMatch('camfit') || !hasDomainMatch('thankyoucamping'));
+
+    if (needsFallback) {
+      const fallbackItems = await runQueries(fallbackQueries);
+      items = items.concat(fallbackItems);
+    }
 
     const debug = req.query.debug === '1';
     const result = { camfit: null, thankyoucamping: null };
