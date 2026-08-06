@@ -617,7 +617,10 @@ function openSheet(item) {
     sheet.classList.add('active');
     gpsBtn.classList.add('shifted');
 
-    upgradeReservationButtons(item.name, btnRow, item.resveUrl);
+    // 주소 앞부분(시/도 + 시/군/구)을 지역명으로 추출해서 예약링크 매칭 시 교차검증에 사용
+    // (예: "경기 하남시 ..." -> "경기 하남시" - 이름만 비슷한 다른 지역 캠핑장 오매칭 방지)
+    const region = (item.address || '').split(/\s+/).slice(0, 2).join(' ');
+    upgradeReservationButtons(item.name, btnRow, item.resveUrl, region);
 }
 
 // 마커를 빠르게 여러 번 클릭했을 때, 이전 요청 결과가 지금 열려있는(다른) 시트에
@@ -634,11 +637,12 @@ function disableButton(btnRow, role, label) {
     a.className = 'reserve-btn disabled';
 }
 
-async function upgradeReservationButtons(name, btnRow, officialUrl) {
+async function upgradeReservationButtons(name, btnRow, officialUrl, region) {
     const myGen = ++sheetGeneration;
     try {
         const officialParam = officialUrl ? `&officialUrl=${encodeURIComponent(officialUrl)}` : '';
-        const res = await fetch(`/api/reservation-link?name=${encodeURIComponent(name)}${officialParam}`);
+        const regionParam = region ? `&region=${encodeURIComponent(region)}` : '';
+        const res = await fetch(`/api/reservation-link?name=${encodeURIComponent(name)}${officialParam}${regionParam}`);
         const data = await res.json();
         if (!res.ok || myGen !== sheetGeneration) return; // 이미 다른 캠핑장 시트로 넘어갔으면 무시
 
