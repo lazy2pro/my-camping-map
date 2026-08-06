@@ -44,12 +44,22 @@ export default async function handler(req, res) {
       strip(s).replace(/제\s?\d+\s?(캠핑장|야영장|캠핑존|지구|존|사이트|캠핑구역|구역)$/, '').trim();
     const skipCampFilter = req.query.raw === '1';
 
+    // 도로명 주소는 있어도 번지/건물번호 없이 "OO면"까지만 끊겨있는 경우가 있어서
+    // (예: "강원 강릉시 연곡면"), 그대로 지오코딩하면 그 행정구역 중심점으로 튐.
+    // 도로명에 숫자가 없으면 "끊긴" 주소로 보고 지번 주소를 우선함.
+    const pickAddress = (it) => {
+      const road = strip(it.roadAddress);
+      const jibun = strip(it.address);
+      if (road && /\d/.test(road)) return road;
+      return jibun || road;
+    };
+
     const items = (data.items || [])
       .filter((it) => skipCampFilter || strip(it.category).includes('캠핑') || strip(it.title).includes('캠핑'))
       .map((it) => ({
         name: normalizeName(it.title) || strip(it.title),
         category: strip(it.category),
-        address: strip(it.roadAddress) || strip(it.address),
+        address: pickAddress(it),
         tel: strip(it.telephone),
       }))
       .filter((it) => it.name && it.address); // 지오코딩할 주소가 있는 것만
