@@ -38,9 +38,10 @@ export default async function handler(req, res) {
     }
 
     const strip = (s) => (s || '').replace(/<[^>]*>/g, '').trim();
+    const skipCampFilter = req.query.raw === '1';
 
     const items = (data.items || [])
-      .filter((it) => strip(it.category).includes('캠핑') || strip(it.title).includes('캠핑'))
+      .filter((it) => skipCampFilter || strip(it.category).includes('캠핑') || strip(it.title).includes('캠핑'))
       .map((it) => ({
         name: strip(it.title),
         category: strip(it.category),
