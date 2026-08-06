@@ -52,6 +52,7 @@ export default async function handler(req, res) {
     const items = allItems.map((it) => ({ ...it, link: (it.link || '').replace(/&amp;/g, '&') }));
 
     const debug = req.query.debug === '1';
+    const strict = req.query.strict === '1'; // 이름이 불안정한(보완검색 등) 경우, 검증 안 된 링크는 아예 안 줌
     const result = { camfit: null, thankyoucamping: null };
     const debugInfo = { allLinks: [...new Set(items.map((it) => it.link))] };
 
@@ -67,7 +68,8 @@ export default async function handler(req, res) {
       // 내용 검증 성공 -> 확실히 신뢰
       // 봇 차단(403 등)으로 검증 자체가 불가능했는데, URL이 "개별 캠핑장 상세페이지" 패턴이면
       // 신뢰도가 충분히 높다고 보고 통과시킴 (완전 미확인 상태로 링크 주는 것보단 안전한 절충)
-      const trustedFallback = !verifyResult.checked && isDetailPage;
+      // 단, strict 모드(이름이 불안정할 수 있는 경우)에서는 이 완화 조건을 쓰지 않음
+      const trustedFallback = !strict && !verifyResult.checked && isDetailPage;
 
       if (verifyResult.verified || trustedFallback) {
         result[key] = found.link;
