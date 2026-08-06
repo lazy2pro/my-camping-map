@@ -38,20 +38,33 @@ export default async function handler(req, res) {
     }
 
     const strip = (s) => (s || '').replace(/<[^>]*>/g, '').trim();
+    // 네이버 지역검색은 "OO캠핑장" 안의 구역을 "OO캠핑장제1캠핑장"처럼 별도 상호로
+    // 쪼개 놓은 경우가 있음. 이 구역명 접미사를 잘라내야 지도 검색/캠핏 매칭이 잘 됨.
+    const normalizeName = (s) =>
+      strip(s).replace(/제\s?\d+\s?(캠핑장|야영장|캠핑존|지구|존|사이트|캠핑구역|구역)$/, '').trim();
     const skipCampFilter = req.query.raw === '1';
 
     const items = (data.items || [])
       .filter((it) => skipCampFilter || strip(it.category).includes('캠핑') || strip(it.title).includes('캠핑'))
       .map((it) => ({
-        name: strip(it.title),
+        name: normalizeName(it.title) || strip(it.title),
         category: strip(it.category),
         address: strip(it.roadAddress) || strip(it.address),
         tel: strip(it.telephone),
       }))
       .filter((it) => it.name && it.address); // 지오코딩할 주소가 있는 것만
 
+    // 이름 정규화로 인해 같은 캠핑장의 여러 구역("제1캠핑장", "제2캠핑장" 등)이
+    // 같은 이름이 되는 경우 중복 제거 (첫 번째 것만 남김)
+    const seenNames = new Set();
+    const dedupedItems = items.filter((it) => {
+      if (seenNames.has(it.name)) return false;
+      seenNames.add(it.name);
+      return true;
+    });
+
     res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=3600');
-    return res.status(200).json({ items });
+    return res.status(200).json({ items: dedupedItems });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
