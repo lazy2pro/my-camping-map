@@ -98,6 +98,7 @@
         .reserve-btn:active { opacity: 0.8; }
         .reserve-btn.primary { background: #2b8a3e; }
         .reserve-btn.secondary { background: #495057; height: 42px; font-size: 14px; }
+        .reserve-btn.disabled { background: #dee2e6; color: #868e96; height: 42px; font-size: 14px; cursor: default; pointer-events: none; }
     </style>
 </head>
 <body>
@@ -607,6 +608,16 @@ function openSheet(item) {
 // 잘못 반영되지 않도록 세대(generation) 토큰으로 방지
 let sheetGeneration = 0;
 
+// 검색해봐도 후보 자체가 없는 경우, 버튼을 눌러도 소용없으니 비활성화 처리
+function disableButton(btnRow, role, label) {
+    const a = btnRow.querySelector(`[data-role="${role}"]`);
+    if (!a) return;
+    a.removeAttribute('href');
+    a.removeAttribute('target');
+    a.innerText = label;
+    a.className = 'reserve-btn disabled';
+}
+
 async function upgradeReservationButtons(name, btnRow) {
     const myGen = ++sheetGeneration;
     try {
@@ -621,6 +632,8 @@ async function upgradeReservationButtons(name, btnRow) {
                 a.innerText = '캠핏 예약페이지 바로가기';
                 a.className = 'reserve-btn primary';
             }
+        } else if (data.candidateFound && data.candidateFound.camfit === false) {
+            disableButton(btnRow, 'camfit', '캠핏에 없는 캠핑장');
         }
         if (data.thankyoucamping) {
             const a = btnRow.querySelector('[data-role="thankyoucamping"]');
@@ -629,6 +642,8 @@ async function upgradeReservationButtons(name, btnRow) {
                 a.innerText = '땡큐캠핑 예약페이지 바로가기';
                 a.className = 'reserve-btn primary';
             }
+        } else if (data.candidateFound && data.candidateFound.thankyoucamping === false) {
+            disableButton(btnRow, 'thankyoucamping', '땡큐캠핑에 없는 캠핑장');
         }
     } catch (err) {
         console.error('예약페이지 확인 실패:', err);
