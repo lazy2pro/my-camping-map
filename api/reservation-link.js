@@ -22,7 +22,7 @@ const TARGET_SITES = {
 
 export default async function handler(req, res) {
   try {
-    const { name } = req.query;
+    const { name, officialUrl } = req.query;
     if (!name) {
       return res.status(400).json({ error: 'name 파라미터가 필요합니다.' });
     }
@@ -62,31 +62,34 @@ export default async function handler(req, res) {
     const candidateFound = { camfit: false, thankyoucamping: false }; // 검증 여부와 무관하게, 후보 링크 자체가 있었는지
     const debugInfo = { allLinks: [...new Set(items.map((it) => it.link))] };
 
-    // 캠핏/땡큐캠핑 검증도 병렬로 동시 실행
-    await Promise.all(
-      Object.entries(TARGET_SITES).map(async ([key, cfg]) => {
-        const found = items.find((it) => cfg.pattern.test(it.link));
-        if (!found) {
-          if (debug) debugInfo[key] = { candidateFound: false };
-          return;
-        }
+    // 캠핏/땡큐캠핑 검증과, 고캠핑 API가 준 공식 예약링크(officialUrl) 생존 확인을 모두 병렬 실행
+    const [, officialValid] = await Promise.all([
+      Promise.all(
+        Object.entries(TARGET_SITES).map(async ([key, cfg]) => {
+          const found = items.find((it) => cfg.pattern.test(it.link));
+          if (!found) {
+            if (debug) debugInfo[key] = { candidateFound: false };
+            return;
+          }
 
-        candidateFound[key] = true;
-        const verifyResult = await pageContainsName(found.link, name);
-        const isDetailPage = cfg.detailPath.test(found.link);
-        // 내용 검증 성공 -> 확실히 신뢰
-        // 봇 차단(403 등)으로 검증 자체가 불가능했는데, URL이 "개별 캠핑장 상세페이지" 패턴이면
-        // 신뢰도가 충분히 높다고 보고 통과시킴 (완전 미확인 상태로 링크 주는 것보단 안전한 절충)
-        const trustedFallback = !verifyResult.checked && isDetailPage;
+          candidateFound[key] = true;
+          const verifyResult = await pageContainsName(found.link, name);
+          const isDetailPage = cfg.detailPath.test(found.link);
+          // 내용 검증 성공 -> 확실히 신뢰
+          // 봇 차단(403 등)으로 검증 자체가 불가능했는데, URL이 "개별 캠핑장 상세페이지" 패턴이면
+          // 신뢰도가 충분히 높다고 보고 통과시킴 (완전 미확인 상태로 링크 주는 것보단 안전한 절충)
+          const trustedFallback = !verifyResult.checked && isDetailPage;
 
-        if (verifyResult.verified || trustedFallback) {
-          result[key] = found.link;
-        }
-        if (debug) {
-          debugInfo[key] = { candidateFound: true, candidateLink: found.link, isDetailPage, trustedFallback, ...verifyResult };
-        }
-      })
-    );
+          if (verifyResult.verified || trustedFallback) {
+            result[key] = found.link;
+          }
+          if (debug) {
+            debugInfo[key] = { candidateFound: true, candidateLink: found.link, isDetailPage, trustedFallback, ...verifyResult };
+          }
+        })
+      ),
+      checkUrlAlive(officialUrl),
+    ]);
 
     // 참고: 네이버예약 자동감지는 시도했으나, 네이버지도의 비공식 검색 API가
     // 캡차(ncaptcha)로 자동화된 요청을 차단해서 서버에서는 확인이 불가능함을 확인.
@@ -97,9 +100,34 @@ export default async function handler(req, res) {
     if (!debug) {
       res.setHeader('Cache-Control', 's-maxage=604800, stale-while-revalidate=86400');
     }
-    return res.status(200).json(debug ? { ...result, candidateFound, debug: debugInfo } : { ...result, candidateFound });
+    return res.status(200).json(
+      debug
+        ? { ...result, candidateFound, officialValid, debug: debugInfo }
+        : { ...result, candidateFound, officialValid }
+    );
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+}
+
+// 고캠핑 API가 준 공식 예약링크가 실제로 살아있는지 확인 (404 등 죽은 링크 감지용)
+// officialUrl이 없으면 null(확인 대상 아님)을 돌려줌 - false(죽음)와 구분하기 위함
+async function checkUrlAlive(officialUrl) {
+  if (!officialUrl || !officialUrl.startsWith('http')) return null;
+  const commonHeaders = {
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  };
+  try {
+    const headRes = await fetch(officialUrl, { method: 'HEAD', headers: commonHeaders });
+    if (headRes.status === 405 || headRes.status === 501) {
+      // HEAD를 지원 안 하는 서버는 GET으로 재시도
+      const getRes = await fetch(officialUrl, { method: 'GET', headers: commonHeaders });
+      return getRes.ok;
+    }
+    return headRes.ok;
+  } catch (e) {
+    return false; // 요청 자체가 실패해도 죽은 링크로 간주
   }
 }
 
