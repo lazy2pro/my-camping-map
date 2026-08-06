@@ -572,6 +572,7 @@ function openSheet(item) {
             href: item.resveUrl,
             label: item.resveCl ? `예약하기 (${item.resveCl})` : '예약 페이지 바로가기',
             cls: 'primary',
+            role: 'official',
         });
     } else if (isReservationWorthyUrl(item.homepage)) {
         // 2순위: 공식 홈페이지 (블로그/카페/SNS면 제외)
@@ -616,7 +617,7 @@ function openSheet(item) {
     sheet.classList.add('active');
     gpsBtn.classList.add('shifted');
 
-    upgradeReservationButtons(item.name, btnRow);
+    upgradeReservationButtons(item.name, btnRow, item.resveUrl);
 }
 
 // 마커를 빠르게 여러 번 클릭했을 때, 이전 요청 결과가 지금 열려있는(다른) 시트에
@@ -633,12 +634,24 @@ function disableButton(btnRow, role, label) {
     a.className = 'reserve-btn disabled';
 }
 
-async function upgradeReservationButtons(name, btnRow) {
+async function upgradeReservationButtons(name, btnRow, officialUrl) {
     const myGen = ++sheetGeneration;
     try {
-        const res = await fetch(`/api/reservation-link?name=${encodeURIComponent(name)}`);
+        const officialParam = officialUrl ? `&officialUrl=${encodeURIComponent(officialUrl)}` : '';
+        const res = await fetch(`/api/reservation-link?name=${encodeURIComponent(name)}${officialParam}`);
         const data = await res.json();
         if (!res.ok || myGen !== sheetGeneration) return; // 이미 다른 캠핑장 시트로 넘어갔으면 무시
+
+        // 고캠핑 API가 준 공식 예약링크가 죽어있으면(404 등), 그 캠핑장 이름으로
+        // 검색한 결과 페이지로 버튼을 바로 교체
+        if (data.officialValid === false) {
+            const a = btnRow.querySelector('[data-role="official"]');
+            if (a) {
+                a.href = `https://search.naver.com/search.naver?query=${encodeURIComponent(name + ' 예약')}`;
+                a.innerText = `'${name}' 검색결과 보기 (기존 링크 접속 불가)`;
+                a.className = 'reserve-btn primary';
+            }
+        }
 
         if (data.camfit) {
             const a = btnRow.querySelector('[data-role="camfit"]');
