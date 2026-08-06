@@ -52,7 +52,7 @@ export default async function handler(req, res) {
     const items = allItems.map((it) => ({ ...it, link: (it.link || '').replace(/&amp;/g, '&') }));
 
     const debug = req.query.debug === '1';
-    const result = { _codeVersion: 'naver-allsearch-v1', camfit: null, thankyoucamping: null };
+    const result = { camfit: null, thankyoucamping: null };
     const debugInfo = { allLinks: [...new Set(items.map((it) => it.link))] };
 
     for (const [key, cfg] of Object.entries(TARGET_SITES)) {
@@ -77,12 +77,9 @@ export default async function handler(req, res) {
       }
     }
 
-    // 네이버지도 자체에 "네이버예약"이 연동된 캠핑장인지 확인
-    // (지도 엔진과 무관하게, 네이버지도의 비공식 검색 API로 예약 연동 여부만 감지)
-    const naverMapUrl = `https://map.naver.com/p/search/${encodeURIComponent(name)}`;
-    const naverReserveResult = await pageHasNaverReservation(name, debug);
-    result.naverReservation = naverReserveResult.hasReservation ? naverMapUrl : null;
-    if (debug) debugInfo.naverReservation = naverReserveResult;
+    // 참고: 네이버예약 자동감지는 시도했으나, 네이버지도의 비공식 검색 API가
+    // 캡차(ncaptcha)로 자동화된 요청을 차단해서 서버에서는 확인이 불가능함을 확인.
+    // 프론트엔드에서 "네이버지도에서 보기" 링크는 검증 없이 그대로 제공.
 
     // 같은 캠핑장 이름은 7일간 캐시 (여러 사용자가 같은 캠핑장을 눌러도 API 재호출 안 함)
     // 디버그 요청은 캐시하지 않음
@@ -127,57 +124,6 @@ async function pageContainsName(url, name) {
   }
 }
 
-// 네이버지도가 자체적으로 쓰는 (비공식) 검색 API를 통해 이 캠핑장이 네이버예약과
-// 연동되어 있는지 확인. 공식 문서화된 API가 아니라서 언제든 바뀌거나 막힐 수 있음.
-async function pageHasNaverReservation(name, debug) {
-  try {
-    const query = encodeURIComponent(name);
-    const url = `https://map.naver.com/p/api/search/allSearch?query=${query}&type=all&searchCoord=127.9784;36.5&boundary=`;
-
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        Referer: `https://map.naver.com/p/search/${query}`,
-        Accept: 'application/json, text/plain, */*',
-      },
-    });
-
-    if (!res.ok) {
-      return { hasReservation: false, checked: false, reason: `allSearch API 응답 실패 (status ${res.status})` };
-    }
-
-    const data = await res.json();
-    const raw = JSON.stringify(data);
-
-    // 장소 결과 목록을 최대한 유연하게 찾음 (응답 구조가 바뀔 수 있어서 여러 경로 시도)
-    const places =
-      data?.result?.place?.list ||
-      data?.result?.place?.items ||
-      data?.place?.list ||
-      [];
-
-    // 이름이 일치하는 장소를 찾고, 그 장소 데이터 안에 예약 관련 필드가 있는지 확인
-    const normalize = (s) => (s || '').replace(/<[^>]*>/g, '').replace(/\s+/g, '').toLowerCase();
-    const target = normalize(name);
-    const matched = places.find((p) => normalize(p.name || p.title).includes(target)) || places[0];
-
-    const matchedRaw = matched ? JSON.stringify(matched) : '';
-    const hasReservation =
-      /bookingBusinessId/i.test(matchedRaw) ||
-      /"booking"\s*:\s*(true|\{)/i.test(matchedRaw) ||
-      (matched && matched.visitorReservationUrl) ||
-      (matched && matched.reservation);
-
-    return {
-      hasReservation: !!hasReservation,
-      checked: true,
-      placesFound: places.length,
-      matchedName: matched ? matched.name || matched.title : null,
-      reason: hasReservation ? '예약 관련 필드 확인됨' : '예약 관련 필드 못 찾음',
-      ...(debug ? { rawSample: raw.slice(0, 4000), matchedRaw: matchedRaw.slice(0, 2000) } : {}),
-    };
-  } catch (e) {
-    return { hasReservation: false, checked: false, reason: `요청 자체 실패: ${e.message}` };
-  }
-}
+// 네이버지도 자동감지는 캡차 차단으로 서버에서 확인이 불가능해 제거함
+// (map.naver.com의 비공식 검색 API가 자동화된 요청을 감지하면 결과 대신
+//  ncaptcha 확인을 요구해서, 서버 코드로는 우회할 수 없음)
