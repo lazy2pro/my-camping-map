@@ -474,7 +474,7 @@ function searchByPlaceName(keyword) {
 // 지오코더로 못 찾은 지명을 지역검색(예: "계방산")으로 찾아서 위치를 알아냄
 async function searchByLandmarkName(keyword) {
     try {
-        const res = await fetch(`/api/nearby-camps?keyword=${encodeURIComponent(keyword)}`);
+        const res = await fetch(`/api/nearby-camps?keyword=${encodeURIComponent(keyword)}&raw=1`);
         const data = await res.json();
         if (!res.ok || !data.items || !data.items.length) return false;
 
