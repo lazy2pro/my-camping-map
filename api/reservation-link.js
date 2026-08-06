@@ -44,8 +44,13 @@ export default async function handler(req, res) {
       'X-NCP-APIGW-API-KEY': clientSecret,
     };
     const hasCampSuffix = /(캠핑장|야영장)$/.test(name);
-    const queries = [`${name} 예약`, `${name} 캠핑`];
-    if (!hasCampSuffix) queries.push(`${name}캠핑장 예약`);
+    const fullName = hasCampSuffix ? name : `${name}캠핑장`;
+    // 더 구체적인 검색어를 앞에 둬서, 같은 순위의 후보 중 먼저 나온 걸 고를 때
+    // 더 정확한 검색에서 나온 결과가 우선되도록 함
+    const queries = [];
+    if (region) queries.push(`${region} ${fullName}`); // 가장 구체적: 지역명 자체에 포함
+    if (!hasCampSuffix) queries.push(`${fullName} 예약`);
+    queries.push(`${name} 예약`, `${name} 캠핑`);
     const searchResults = await Promise.all(
       queries.map(async (q) => {
         const searchUrl = `https://naverapihub.apigw.ntruss.com/search/v1/webkr?query=${encodeURIComponent(q)}&display=30&format=json`;
