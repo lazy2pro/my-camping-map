@@ -32,52 +32,56 @@ export default async function handler(req, res) {
       });
     }
 
-    // 검색어를 두 번(예약/캠핑) 돌려서 후보군을 넓힘 - 플랫폼마다 어떤 단어와 잘 걸리는지 달라서
+    // 검색어를 두 번(예약/캠핑) 돌려서 후보군을 넓힘 - 병렬로 동시 실행해서 속도 개선
     const headers = {
       'X-NCP-APIGW-API-KEY-ID': clientId,
       'X-NCP-APIGW-API-KEY': clientSecret,
     };
     const queries = [`${name} 예약`, `${name} 캠핑`];
-    const allItems = [];
-    for (const q of queries) {
-      const searchUrl = `https://naverapihub.apigw.ntruss.com/search/v1/webkr?query=${encodeURIComponent(q)}&display=30&format=json`;
-      const searchRes = await fetch(searchUrl, { headers });
-      const searchData = await searchRes.json();
-      if (!searchRes.ok) {
-        return res.status(502).json({ error: '네이버 검색 API 오류', detail: searchData });
-      }
-      allItems.push(...(searchData.items || []));
+    const searchResults = await Promise.all(
+      queries.map(async (q) => {
+        const searchUrl = `https://naverapihub.apigw.ntruss.com/search/v1/webkr?query=${encodeURIComponent(q)}&display=30&format=json`;
+        const searchRes = await fetch(searchUrl, { headers });
+        const searchData = await searchRes.json();
+        return { ok: searchRes.ok, data: searchData };
+      })
+    );
+    const failed = searchResults.find((r) => !r.ok);
+    if (failed) {
+      return res.status(502).json({ error: '네이버 검색 API 오류', detail: failed.data });
     }
+    const allItems = searchResults.flatMap((r) => r.data.items || []);
 
     const items = allItems.map((it) => ({ ...it, link: (it.link || '').replace(/&amp;/g, '&') }));
 
     const debug = req.query.debug === '1';
-    const strict = req.query.strict === '1'; // 이름이 불안정한(보완검색 등) 경우, 검증 안 된 링크는 아예 안 줌
     const result = { camfit: null, thankyoucamping: null };
     const debugInfo = { allLinks: [...new Set(items.map((it) => it.link))] };
 
-    for (const [key, cfg] of Object.entries(TARGET_SITES)) {
-      const found = items.find((it) => cfg.pattern.test(it.link));
-      if (!found) {
-        if (debug) debugInfo[key] = { candidateFound: false };
-        continue;
-      }
+    // 캠핏/땡큐캠핑 검증도 병렬로 동시 실행
+    await Promise.all(
+      Object.entries(TARGET_SITES).map(async ([key, cfg]) => {
+        const found = items.find((it) => cfg.pattern.test(it.link));
+        if (!found) {
+          if (debug) debugInfo[key] = { candidateFound: false };
+          return;
+        }
 
-      const verifyResult = await pageContainsName(found.link, name);
-      const isDetailPage = cfg.detailPath.test(found.link);
-      // 내용 검증 성공 -> 확실히 신뢰
-      // 봇 차단(403 등)으로 검증 자체가 불가능했는데, URL이 "개별 캠핑장 상세페이지" 패턴이면
-      // 신뢰도가 충분히 높다고 보고 통과시킴 (완전 미확인 상태로 링크 주는 것보단 안전한 절충)
-      // 단, strict 모드(이름이 불안정할 수 있는 경우)에서는 이 완화 조건을 쓰지 않음
-      const trustedFallback = !strict && !verifyResult.checked && isDetailPage;
+        const verifyResult = await pageContainsName(found.link, name);
+        const isDetailPage = cfg.detailPath.test(found.link);
+        // 내용 검증 성공 -> 확실히 신뢰
+        // 봇 차단(403 등)으로 검증 자체가 불가능했는데, URL이 "개별 캠핑장 상세페이지" 패턴이면
+        // 신뢰도가 충분히 높다고 보고 통과시킴 (완전 미확인 상태로 링크 주는 것보단 안전한 절충)
+        const trustedFallback = !verifyResult.checked && isDetailPage;
 
-      if (verifyResult.verified || trustedFallback) {
-        result[key] = found.link;
-      }
-      if (debug) {
-        debugInfo[key] = { candidateFound: true, candidateLink: found.link, isDetailPage, trustedFallback, ...verifyResult };
-      }
-    }
+        if (verifyResult.verified || trustedFallback) {
+          result[key] = found.link;
+        }
+        if (debug) {
+          debugInfo[key] = { candidateFound: true, candidateLink: found.link, isDetailPage, trustedFallback, ...verifyResult };
+        }
+      })
+    );
 
     // 참고: 네이버예약 자동감지는 시도했으나, 네이버지도의 비공식 검색 API가
     // 캡차(ncaptcha)로 자동화된 요청을 차단해서 서버에서는 확인이 불가능함을 확인.
