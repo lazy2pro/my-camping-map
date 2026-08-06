@@ -156,6 +156,24 @@ function isReservationWorthyUrl(url) {
     }
 }
 
+// 서버(reservation-link.js)와 동일한 사이트 판별 패턴.
+// 고캠핑 registry의 resveUrl/homepage가 이미 이 사이트를 직접 가리키는 경우
+// 구글 검색으로 우회하지 않고 바로 연결하기 위해 사용한다.
+const SITE_PATTERNS = {
+    camfit: /camfit\.co\.kr/i,
+    thankyoucamping: /thankqcamping\.com/i,
+};
+
+function detectDirectSiteLinks(item) {
+    const links = {};
+    [item.resveUrl, item.homepage].forEach((url) => {
+        if (!isReservationWorthyUrl(url)) return;
+        if (!links.camfit && SITE_PATTERNS.camfit.test(url)) links.camfit = url;
+        if (!links.thankyoucamping && SITE_PATTERNS.thankyoucamping.test(url)) links.thankyoucamping = url;
+    });
+    return links;
+}
+
 const API_BASE = '/api/camping';
 
 let map;
@@ -581,11 +599,15 @@ function openSheet(item) {
     telEl.innerText = item.tel ? `☎ ${item.tel}` : '';
 
     const buttons = [];
+    // '상세정보 보기'(placeUrl)가 이미 네이버지도 검색 링크와 동일하므로,
+    // 그 경우 하단에 중복되는 '네이버지도에서 보기' 버튼은 생략한다.
+    let naverMapButtonNeeded = true;
 
     if (item.source === 'naver') {
         addrEl.innerText += ' (고캠핑 미등록 · 보완 검색 정보)';
         if (item.placeUrl) {
             buttons.push({ href: item.placeUrl, label: '상세정보 보기', cls: 'primary' });
+            naverMapButtonNeeded = false;
         }
     } else if (isReservationWorthyUrl(item.resveUrl)) {
         buttons.push({
@@ -598,32 +620,65 @@ function openSheet(item) {
         buttons.push({ href: item.homepage, label: '홈페이지 바로가기', cls: 'primary' });
     }
 
-    buttons.push({
-        href: `https://www.google.com/search?q=${encodeURIComponent('site:camfit.co.kr ' + item.name)}`,
-        label: '캠핏에서 찾기',
-        cls: buttons.length === 0 ? 'primary' : 'secondary',
-        role: 'camfit',
-    });
-    buttons.push({
-        href: `https://www.google.com/search?q=${encodeURIComponent('site:thankqcamping.com ' + item.name)}`,
-        label: '땡큐캠핑에서 찾기',
-        cls: 'secondary',
-        role: 'thankyoucamping',
-    });
+    // 고캠핑의 resveUrl/homepage가 이미 캠핏·땡큐캠핑 링크라면, 구글 검색을 거치지 않고
+    // 바로 그 링크로 연결한다. 아직 알 수 없는 쪽만 '확인 중' 상태로 표시했다가
+    // upgradeReservationButtons()의 검증 결과로 채운다 (검색 결과 페이지로 먼저
+    // 보내던 기존 방식은 대부분 불필요한 경유였다).
+    const directLinks = detectDirectSiteLinks(item);
 
-    buttons.push({
-        href: `https://map.naver.com/p/search/${encodeURIComponent(item.name)}`,
-        label: '네이버지도에서 보기',
-        cls: 'secondary',
-    });
+    if (directLinks.camfit) {
+        buttons.push({
+            href: directLinks.camfit,
+            label: '캠핏 예약페이지 바로가기',
+            cls: buttons.length === 0 ? 'primary' : 'secondary',
+            role: 'camfit',
+        });
+    } else {
+        buttons.push({
+            href: null,
+            label: '캠핏 확인 중…',
+            cls: 'disabled',
+            role: 'camfit',
+            pending: true,
+        });
+    }
+
+    if (directLinks.thankyoucamping) {
+        buttons.push({
+            href: directLinks.thankyoucamping,
+            label: '땡큐캠핑 예약페이지 바로가기',
+            cls: 'secondary',
+            role: 'thankyoucamping',
+        });
+    } else {
+        buttons.push({
+            href: null,
+            label: '땡큐캠핑 확인 중…',
+            cls: 'disabled',
+            role: 'thankyoucamping',
+            pending: true,
+        });
+    }
+
+    if (naverMapButtonNeeded) {
+        buttons.push({
+            href: `https://map.naver.com/p/search/${encodeURIComponent(item.name)}`,
+            label: '네이버지도에서 보기',
+            cls: 'secondary',
+        });
+    }
 
     btnRow.innerHTML = '';
     btnRow.style.flexDirection = 'column';
     buttons.forEach((b) => {
         const a = document.createElement('a');
-        a.href = b.href;
-        a.target = '_blank';
-        a.rel = 'noopener';
+        if (b.pending) {
+            a.dataset.pending = '1';
+        } else {
+            a.href = b.href;
+            a.target = '_blank';
+            a.rel = 'noopener';
+        }
         a.className = `reserve-btn ${b.cls}`;
         a.innerText = b.label;
         if (b.role) a.dataset.role = b.role;
@@ -633,8 +688,14 @@ function openSheet(item) {
     sheet.classList.add('active');
     gpsBtn.classList.add('shifted');
 
-    const region = (item.address || '').split(/\s+/).slice(0, 2).join(' ');
-    upgradeReservationButtons(item.name, btnRow, item.resveUrl, region);
+    // 캠핏/땡큐캠핑 링크를 이미 둘 다 직접 확보했고 official 버튼도 없다면,
+    // 굳이 reservation-link API를 호출할 필요가 없다 (불필요한 백엔드 호출 절감).
+    const hasOfficialButton = buttons.some((b) => b.role === 'official');
+    const hasPendingSite = !directLinks.camfit || !directLinks.thankyoucamping;
+    if (hasOfficialButton || hasPendingSite) {
+        const region = (item.address || '').split(/\s+/).slice(0, 2).join(' ');
+        upgradeReservationButtons(item.name, btnRow, item.resveUrl, region);
+    }
 }
 
 let sheetGeneration = 0;
@@ -646,6 +707,39 @@ function disableButton(btnRow, role, label) {
     a.removeAttribute('target');
     a.innerText = label;
     a.className = 'reserve-btn disabled';
+    delete a.dataset.pending;
+}
+
+// '확인 중' 상태였던 버튼에 검증 결과를 반영한다. 찾았으면 직접 링크로,
+// 없는 것이 확인되면 비활성화로 바꾼다. 애매/실패한 경우는 그대로 두고
+// 호출부의 fallbackToSearch()가 최종적으로 구글 검색 링크로 대체한다.
+function resolvePendingButton(btnRow, role, directUrl, confirmedAbsent, foundLabel, notFoundLabel) {
+    const a = btnRow.querySelector(`[data-role="${role}"]`);
+    if (!a) return;
+    if (directUrl) {
+        a.href = directUrl;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.innerText = foundLabel;
+        a.className = 'reserve-btn primary';
+        delete a.dataset.pending;
+    } else if (confirmedAbsent) {
+        disableButton(btnRow, role, notFoundLabel);
+    }
+}
+
+// 검증이 실패했거나 결과가 애매해 여전히 '확인 중' 상태로 남은 버튼은,
+// 사용자가 최소한 수동으로라도 찾아볼 수 있도록 구글 사이트 검색 링크로 대체한다.
+function fallbackToSearch(btnRow, role, label, name) {
+    const a = btnRow.querySelector(`[data-role="${role}"]`);
+    if (!a || a.dataset.pending !== '1') return;
+    const site = role === 'camfit' ? 'camfit.co.kr' : 'thankqcamping.com';
+    a.href = `https://www.google.com/search?q=${encodeURIComponent('site:' + site + ' ' + name)}`;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.innerText = label;
+    a.className = 'reserve-btn secondary';
+    delete a.dataset.pending;
 }
 
 async function upgradeReservationButtons(name, btnRow, officialUrl, region) {
@@ -666,28 +760,23 @@ async function upgradeReservationButtons(name, btnRow, officialUrl, region) {
             }
         }
 
-        if (data.camfit) {
-            const a = btnRow.querySelector('[data-role="camfit"]');
-            if (a) {
-                a.href = data.camfit;
-                a.innerText = '캠핏 예약페이지 바로가기';
-                a.className = 'reserve-btn primary';
-            }
-        } else if (data.candidateFound && data.candidateFound.camfit === false) {
-            disableButton(btnRow, 'camfit', '캠핏에 없는 캠핑장');
-        }
-        if (data.thankyoucamping) {
-            const a = btnRow.querySelector('[data-role="thankyoucamping"]');
-            if (a) {
-                a.href = data.thankyoucamping;
-                a.innerText = '땡큐캠핑 예약페이지 바로가기';
-                a.className = 'reserve-btn primary';
-            }
-        } else if (data.candidateFound && data.candidateFound.thankyoucamping === false) {
-            disableButton(btnRow, 'thankyoucamping', '땡큐캠핑에 없는 캠핑장');
-        }
+        resolvePendingButton(
+            btnRow, 'camfit', data.camfit,
+            data.candidateFound && data.candidateFound.camfit === false,
+            '캠핏 예약페이지 바로가기', '캠핏에 없는 캠핑장'
+        );
+        resolvePendingButton(
+            btnRow, 'thankyoucamping', data.thankyoucamping,
+            data.candidateFound && data.candidateFound.thankyoucamping === false,
+            '땡큐캠핑 예약페이지 바로가기', '땡큐캠핑에 없는 캠핑장'
+        );
     } catch (err) {
         console.error('예약페이지 확인 실패:', err);
+    } finally {
+        if (myGen === sheetGeneration) {
+            fallbackToSearch(btnRow, 'camfit', '캠핏에서 찾기', name);
+            fallbackToSearch(btnRow, 'thankyoucamping', '땡큐캠핑에서 찾기', name);
+        }
     }
 }
 
