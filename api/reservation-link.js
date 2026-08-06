@@ -95,11 +95,16 @@ export default async function handler(req, res) {
             return;
           }
 
-          // 우선순위: 1) "이름+캠핑장" 정확 매칭  2) 지역명 일치  3) 그냥 첫 후보
+          // 우선순위: 1) 이름+지역 둘 다 일치  2) 이름만 일치  3) 지역만 일치  4) 그냥 첫 후보
+          // (이름만 보고 고르면, 같은 이름을 쓰는 다른 지역 캠핑장이 여러 개일 때
+          //  엉뚱한 쪽이 먼저 걸릴 수 있어서 지역까지 같이 맞는 걸 최우선으로 함)
+          const nameAndRegionMatched = domainMatches.find(
+            (it) => snippetMatchesFullName(it) && snippetMatchesRegion(it) === true
+          );
           const fullNameMatched = domainMatches.find((it) => snippetMatchesFullName(it));
           const regionMatched = domainMatches.find((it) => snippetMatchesRegion(it) === true);
-          const found = fullNameMatched || regionMatched || domainMatches[0];
-          const nameConfirmed = !!fullNameMatched;
+          const found = nameAndRegionMatched || fullNameMatched || regionMatched || domainMatches[0];
+          const nameConfirmed = snippetMatchesFullName(found);
           const regionOk = snippetMatchesRegion(found); // true/false/null(정보없음)
 
           candidateFound[key] = true;
