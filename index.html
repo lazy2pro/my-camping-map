@@ -312,15 +312,18 @@ function renderFuelStations(stations) {
 }
 
 async function fetchFuelInView() {
-    if (!map) return;
+    if (!map) return null;
     const center = map.getCenter();
     // 오피넷 API 반경 제한(최대 5km)에 맞춘다. 너무 축소된 화면에서는 일부만 표시될 수 있다.
     const radius = Math.min(calcRadiusFromZoom(), 5000);
     try {
         const stations = await fetchFuelStations(center.lat(), center.lng(), radius);
         renderFuelStations(stations);
+        return stations;
     } catch (err) {
         console.error('등유 가격 조회 실패:', err);
+        showStatus(err.message || '등유 가격 정보를 불러오지 못했습니다.', true, 3000);
+        return null;
     }
 }
 
@@ -331,8 +334,13 @@ function toggleFuelLayer() {
 
     if (fuelLayerActive) {
         showStatus('주변 등유 가격 불러오는 중...');
-        fetchFuelInView().then(() => {
-            showStatus(`반경 ${(Math.min(calcRadiusFromZoom(), 5000) / 1000).toFixed(1)}km 이내 주유소 표시 중`, false, 2000);
+        fetchFuelInView().then((stations) => {
+            if (!stations) return; // 오류는 fetchFuelInView에서 이미 표시함
+            if (stations.length === 0) {
+                showStatus('이 주변 반경엔 등유 판매 주유소 정보가 없어요', false, 3000);
+            } else {
+                showStatus(`주유소 ${stations.length}곳 표시 중`, false, 2000);
+            }
         });
     } else {
         clearFuelMarkers();
