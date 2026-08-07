@@ -88,7 +88,16 @@ export default async function handler(req, res) {
     const candidateFound = { camfit: false, thankyoucamping: false };
     const debugInfo = { allLinks: [...new Set(items.map((it) => it.link))] };
 
-    const regionTokens = (region || '').split(/\s+/).filter((t) => t.length >= 2);
+    // 행정구역 접미어(도/시/군/구/읍/면 등) 표기가 사이트마다 다를 수 있어
+    // ('경기도' vs '경기', '양평군' vs '양평') 원본과 축약형을 모두 후보로 둔다.
+    const ADMIN_SUFFIX = /(특별자치도|특별자치시|광역시|특별시|도|시|군|구|읍|면|동|리)$/;
+    const regionTokens = (region || '')
+      .split(/\s+/)
+      .filter((t) => t.length >= 2)
+      .flatMap((t) => {
+        const stripped = t.replace(ADMIN_SUFFIX, '');
+        return stripped.length >= 2 && stripped !== t ? [t, stripped] : [t];
+      });
     const normalizeText = (s) => (s || '').replace(/<[^>]*>/g, '').toLowerCase().replace(/\s+/g, '');
     
     const snippetMatchesRegion = (it) => {
@@ -201,12 +210,27 @@ async function pageContainsName(url, name) {
 
     const html = await pageRes.text();
     const normalize = (s) => s.replace(/\s+/g, '').toLowerCase();
-    const found = normalize(html.slice(0, 25000)).includes(normalize(name));
+    const normalizedHtml = normalize(html.slice(0, 25000));
+    const normalizedName = normalize(name);
+
+    let found = normalizedHtml.includes(normalizedName);
+    let reason = found ? '이름 완전일치' : '';
+
+    if (!found) {
+      // 검색에 쓰인 이름과 실제 업체 표기가 접미어만 다른 경우
+      // (예: '갈기산캠핑장' 검색 -> 실제 페이지는 '갈기산펜션캠핑장')
+      // 완전일치가 실패해도 핵심 키워드가 페이지에 있으면 같은 곳으로 간주한다.
+      const core = normalizedName.replace(/(캠핑장|야영장|펜션|글램핑|캠핑존|리조트)+$/g, '');
+      if (core.length >= 2 && normalizedHtml.includes(core)) {
+        found = true;
+        reason = '핵심 키워드 일치 (접미어 차이 허용)';
+      }
+    }
 
     return {
       verified: found,
       checked: true,
-      reason: found ? '이름 확인됨' : '페이지 내 미검출',
+      reason: reason || '페이지 내 미검출',
     };
   } catch (e) {
     return { verified: false, checked: false, reason: e.message };
