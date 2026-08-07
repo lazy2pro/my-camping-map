@@ -31,6 +31,15 @@
         .search-btn:active { opacity: 0.85; }
         .search-btn:disabled { background: #adb5bd; }
 
+        .fuel-toggle-btn {
+            background: #f1f3f5; border: none; color: #495057;
+            width: 42px; border-radius: 8px; font-size: 18px;
+            cursor: pointer; flex-shrink: 0;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .fuel-toggle-btn:active { opacity: 0.85; }
+        .fuel-toggle-btn.active { background: #1c7ed6; color: white; }
+
         #search-results {
             background: white; border-radius: 12px; max-height: 250px;
             overflow-y: auto; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
@@ -106,6 +115,7 @@
     <div class="search-container">
         <input type="text" id="search-keyword" class="search-input" placeholder="캠핑장 이름 검색 (예: 계방산)" onkeyup="if(event.keyCode===13) searchCamping();">
         <button class="search-btn" id="search-btn" onclick="searchCamping()">검색</button>
+        <button class="fuel-toggle-btn" id="fuel-toggle-btn" onclick="toggleFuelLayer()" title="주변 등유 가격 보기">⛽</button>
     </div>
     <ul id="search-results"></ul>
 </div>
@@ -115,6 +125,7 @@
 <div id="legend">
     <span><span class="dot" style="background:#2b8a3e;"></span>고캠핑 등록 캠핑장</span>
     <span><span class="dot" style="background:#e8590c;"></span>고캠핑 미등록 (보완 검색)</span>
+    <span><span class="dot" style="background:#1c7ed6;"></span>⛽ 실내등유 판매 주유소</span>
 </div>
 
 <div id="map"></div>
@@ -242,6 +253,121 @@ async function fetchCampsData(lat, lng, radius, signal) {
     return data;
 }
 
+// ---- 등유(실내등유) 가격 레이어 ----
+let fuelLayerActive = false;
+let fuelMarkers = [];
+const fuelCache = new Map();
+const FUEL_CACHE_TTL_MS = 30 * 60 * 1000; // 오피넷 응답도 30분 캐시되므로 클라이언트도 동일하게 맞춘다
+const FUEL_CACHE_LIMIT = 50;
+const FUEL_API_BASE = '/api/kerosene';
+
+function fuelCacheKey(lat, lng, radius) {
+    const gridLat = Math.round(lat * 100) / 100;
+    const gridLng = Math.round(lng * 100) / 100;
+    return `${gridLat},${gridLng},${radius}`;
+}
+
+async function fetchFuelStations(lat, lng, radius) {
+    const key = fuelCacheKey(lat, lng, radius);
+    const cached = fuelCache.get(key);
+    if (cached && (Date.now() - cached.ts) < FUEL_CACHE_TTL_MS) {
+        return cached.stations;
+    }
+    const res = await fetch(`${FUEL_API_BASE}?lat=${lat}&lng=${lng}&radius=${radius}`);
+    const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.error || '등유 가격 정보를 불러오지 못했습니다.');
+    }
+    const stations = data.stations || [];
+    fuelCache.set(key, { stations, ts: Date.now() });
+    if (fuelCache.size > FUEL_CACHE_LIMIT) {
+        fuelCache.delete(fuelCache.keys().next().value);
+    }
+    return stations;
+}
+
+function clearFuelMarkers() {
+    fuelMarkers.forEach((marker) => {
+        naver.maps.Event.clearInstanceListeners(marker);
+        marker.setMap(null);
+    });
+    fuelMarkers = [];
+}
+
+function renderFuelStations(stations) {
+    clearFuelMarkers();
+    stations.forEach((station) => {
+        const marker = new naver.maps.Marker({
+            position: new naver.maps.LatLng(station.lat, station.lng),
+            map,
+            icon: FUEL_ICON,
+            zIndex: 50, // 캠핑장 핀보다 아래에 그려지도록
+        });
+        naver.maps.Event.addListener(marker, 'click', () => {
+            hideResults();
+            openFuelSheet(station);
+        });
+        fuelMarkers.push(marker);
+    });
+}
+
+async function fetchFuelInView() {
+    if (!map) return;
+    const center = map.getCenter();
+    // 오피넷 API 반경 제한(최대 5km)에 맞춘다. 너무 축소된 화면에서는 일부만 표시될 수 있다.
+    const radius = Math.min(calcRadiusFromZoom(), 5000);
+    try {
+        const stations = await fetchFuelStations(center.lat(), center.lng(), radius);
+        renderFuelStations(stations);
+    } catch (err) {
+        console.error('등유 가격 조회 실패:', err);
+    }
+}
+
+function toggleFuelLayer() {
+    fuelLayerActive = !fuelLayerActive;
+    const btn = document.getElementById('fuel-toggle-btn');
+    btn.classList.toggle('active', fuelLayerActive);
+
+    if (fuelLayerActive) {
+        showStatus('주변 등유 가격 불러오는 중...');
+        fetchFuelInView().then(() => {
+            showStatus(`반경 ${(Math.min(calcRadiusFromZoom(), 5000) / 1000).toFixed(1)}km 이내 주유소 표시 중`, false, 2000);
+        });
+    } else {
+        clearFuelMarkers();
+    }
+}
+
+function openFuelSheet(station) {
+    const sheet = document.getElementById('bottom-sheet');
+    const gpsBtn = document.getElementById('gps-btn');
+
+    document.getElementById('camp-category').innerText = `⛽ ${station.brand || '주유소'} · 실내등유`;
+    document.getElementById('camp-title').innerText = station.name;
+    document.getElementById('camp-address').innerText =
+        `${station.price.toLocaleString('ko-KR')}원/L · 약 ${Math.round(station.distance)}m 거리`;
+    document.getElementById('camp-tel').innerText = '';
+
+    const btnRow = document.getElementById('reserve-btn-row');
+    btnRow.innerHTML = '';
+    btnRow.style.flexDirection = 'column';
+    const a = document.createElement('a');
+    a.href = `https://map.naver.com/p/search/${encodeURIComponent(station.name)}`;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.className = 'reserve-btn primary';
+    a.innerText = '네이버지도에서 길찾기';
+    btnRow.appendChild(a);
+
+    // 캠핑장 시트용 비동기 예약버튼 업데이트(upgradeReservationButtons)가 이 시트에
+    // 뒤늦게 반영되지 않도록 세대를 올려 무효화한다.
+    sheetGeneration++;
+
+    sheet.classList.add('active');
+    gpsBtn.classList.add('shifted');
+}
+
 function makePinIcon(color) {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 30 40">
         <path d="M15 0C6.7 0 0 6.7 0 15c0 11 15 25 15 25s15-14 15-25C30 6.7 23.3 0 15 0z" fill="${color}"/>
@@ -253,7 +379,22 @@ function makePinIcon(color) {
         anchor: new naver.maps.Point(15, 40) 
     };
 }
-let GREEN_ICON, ORANGE_ICON;
+
+// 등유 판매 주유소용 핀 — 같은 모양에 흰 원 대신 주유기(⛽) 아이콘을 넣어 캠핑장 핀과 구분한다.
+function makeFuelPinIcon() {
+    const color = '#1c7ed6';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 30 40">
+        <path d="M15 0C6.7 0 0 6.7 0 15c0 11 15 25 15 25s15-14 15-25C30 6.7 23.3 0 15 0z" fill="${color}"/>
+        <circle cx="15" cy="15" r="9" fill="white"/>
+        <text x="15" y="16" font-size="13" text-anchor="middle" dominant-baseline="middle">&#9981;</text>
+    </svg>`;
+    return {
+        url: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg),
+        size: new naver.maps.Size(30, 40),
+        anchor: new naver.maps.Point(15, 40),
+    };
+}
+let GREEN_ICON, ORANGE_ICON, FUEL_ICON;
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
     const R = 6371000;
@@ -272,6 +413,7 @@ function initMap() {
 
     GREEN_ICON = makePinIcon('#2b8a3e');
     ORANGE_ICON = makePinIcon('#e8590c');
+    FUEL_ICON = makeFuelPinIcon();
 
     naver.maps.Event.addListener(map, 'click', () => {
         closeSheet();
@@ -280,7 +422,10 @@ function initMap() {
 
     naver.maps.Event.addListener(map, 'idle', () => {
         clearTimeout(fetchTimer);
-        fetchTimer = setTimeout(fetchCampsInView, 500);
+        fetchTimer = setTimeout(() => {
+            fetchCampsInView();
+            if (fuelLayerActive) fetchFuelInView();
+        }, 500);
     });
 
     moveToCurrentLocation();
