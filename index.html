@@ -66,7 +66,9 @@
         #fuel-price-list {
             position: fixed; top: 76px; right: 16px; bottom: 30px; z-index: 95;
             width: 290px; max-width: 60vw;
-            background: white; border-radius: 12px;
+            background: rgba(255,255,255,0.8);
+            backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+            border-radius: 12px;
             box-shadow: 0 4px 16px rgba(0,0,0,0.2);
             overflow-y: auto; display: none; padding: 0; margin: 0; list-style: none;
         }
@@ -78,7 +80,7 @@
         }
         #fuel-price-list li:last-child { border-bottom: none; }
         #fuel-price-list li:active,
-        #fuel-price-list li.selected { background: #e7f5ff; }
+        #fuel-price-list li.selected { background: rgba(231,245,255,0.85); }
         .fuel-list-info { flex: 1 1 auto; min-width: 0; }
         .fuel-list-top { display: flex; align-items: baseline; gap: 6px; }
         .fuel-list-rank { color: #1c7ed6; font-weight: bold; font-size: 12px; flex-shrink: 0; }
@@ -94,10 +96,13 @@
 
         /* 모바일 화면에서는 리스트가 너무 커지지 않도록 가격·티맵 버튼만 남기고 나머지는 숨긴다 */
         @media (max-width: 480px) {
-            #fuel-price-list { width: 150px; max-width: 42vw; }
-            #fuel-price-list li { padding: 8px; }
+            #fuel-price-list { width: 118px; max-width: 34vw; }
+            #fuel-price-list li { padding: 6px; gap: 4px; }
+            .fuel-list-top { gap: 3px; }
+            .fuel-list-rank { font-size: 10px; }
+            .fuel-list-price { font-size: 13px; }
             .fuel-list-name, .fuel-list-sub { display: none; }
-            .fuel-list-tmap-btn { flex: 0 0 42%; font-size: 11px; padding: 8px 2px; }
+            .fuel-list-tmap-btn { flex: 0 0 46%; font-size: 10px; padding: 6px 2px; }
         }
 
         #status-badge {
@@ -297,6 +302,7 @@ async function fetchCampsData(lat, lng, radius, signal) {
 let fuelLayerActive = false;
 let fuelMarkers = []; // { marker, station } 쌍으로 관리 (선택 강조 시 아이콘 교체를 위해)
 let selectedFuelId = null;
+let suppressNextFuelFetch = false;
 const fuelCache = new Map();
 const FUEL_CACHE_TTL_MS = 30 * 60 * 1000; // 오피넷 응답도 30분 캐시되므로 클라이언트도 동일하게 맞춘다
 const FUEL_CACHE_LIMIT = 50;
@@ -409,7 +415,12 @@ function renderFuelPriceList(stations) {
             <a class="fuel-list-tmap-btn">티맵</a>
         `;
         li.addEventListener('mouseenter', () => setFuelSelection(station.id));
-        li.addEventListener('click', () => setFuelSelection(station.id));
+        li.addEventListener('click', () => {
+            setFuelSelection(station.id);
+            // 줌(스케일)은 그대로 두고, 해당 주유소가 지도 중앙에 오도록만 이동한다.
+            suppressNextFuelFetch = true;
+            map.setCenter(new naver.maps.LatLng(station.lat, station.lng));
+        });
         li.querySelector('.fuel-list-tmap-btn').href = tmapUrl(station);
         listEl.appendChild(li);
     });
@@ -552,7 +563,15 @@ function initMap() {
         clearTimeout(fetchTimer);
         fetchTimer = setTimeout(() => {
             fetchCampsInView();
-            if (fuelLayerActive) fetchFuelInView();
+            if (fuelLayerActive) {
+                // 리스트 항목 클릭으로 지도를 이동시킨 직후에는, 이미 갖고 있는 데이터를
+                // 다시 불러와 강조 표시(선택 상태)가 리셋되는 걸 막기 위해 한 번만 건너뛴다.
+                if (suppressNextFuelFetch) {
+                    suppressNextFuelFetch = false;
+                } else {
+                    fetchFuelInView();
+                }
+            }
         }, 500);
     });
 
