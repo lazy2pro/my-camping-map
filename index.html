@@ -455,55 +455,21 @@ async function searchCamping() {
     btn.innerText = '검색중';
 
     try {
-        const url = `${API_BASE}?type=keyword&keyword=${encodeURIComponent(rawInput)}`;
-        const res = await fetch(url);
-        const data = await res.json();
-
-        if (!res.ok) {
-            alert(data.error || '검색 중 오류가 발생했습니다.');
-            hideResults();
+        // 1) 캠핑장 '이름' 검색을 우선한다 — 고캠핑 등록 캠핑장 + 보완 검색(네이버) 캠핑장 중
+        //    검색어가 이름에 들어있는 곳을 먼저 찾는다. (예: '갈기산' -> '갈기산캠핑장')
+        const nameMatches = await searchCampsByName(rawInput);
+        if (nameMatches.length > 0) {
+            showCampNameResults(nameMatches);
             return;
         }
 
-        if (data.camps.length === 0) {
-            const fallbackFound = await searchByPlaceName(rawInput);
-            if (!fallbackFound) {
-                alert(`'${rawInput}' 검색 결과를 찾지 못했습니다.`);
-            }
-            hideResults();
-            return;
+        // 2) 이름으로 못 찾은 경우에만 지명(장소) 검색으로 넘어간다.
+        //    동명 지역이 여러 곳이면 목록으로 보여주고 사용자가 고르게 한다.
+        const fallbackFound = await searchByPlaceName(rawInput);
+        if (!fallbackFound) {
+            alert(`'${rawInput}' 검색 결과를 찾지 못했습니다.`);
         }
-
-        renderCamps(data.camps);
-
-        const listEl = document.getElementById('search-results');
-        listEl.innerHTML = '';
-
-        data.camps.forEach((item, index) => {
-            const li = document.createElement('li');
-            li.innerHTML = `
-                <div class="result-title">${item.name}</div>
-                <div class="result-sub">
-                    <span class="result-category">${item.category}</span>
-                    <span>${item.address}</span>
-                </div>
-            `;
-            li.onclick = () => {
-                hideResults();
-                map.setCenter(new naver.maps.LatLng(item.lat, item.lng));
-                map.setZoom(15);
-                openSheet(item);
-            };
-            listEl.appendChild(li);
-
-            if (index === 0) {
-                map.setCenter(new naver.maps.LatLng(item.lat, item.lng));
-                map.setZoom(15);
-                openSheet(item);
-            }
-        });
-
-        listEl.style.display = 'block';
+        hideResults();
     } catch (err) {
         console.error(err);
         alert('네트워크 오류로 검색하지 못했습니다.');
@@ -513,48 +479,184 @@ async function searchCamping() {
     }
 }
 
-function searchByPlaceName(keyword) {
+// 고캠핑 등록 캠핑장 + 보완 검색(네이버) 캠핑장을 대상으로 이름 검색을 수행해 하나로 합친다.
+async function searchCampsByName(keyword) {
+    const results = [];
+    const seenKeys = new Set();
+    const addResult = (item) => {
+        const key = `${item.name}|${item.address}`;
+        if (seenKeys.has(key)) return;
+        seenKeys.add(key);
+        results.push(item);
+    };
+
+    // 고캠핑 등록 캠핑장 이름검색
+    try {
+        const res = await fetch(`${API_BASE}?type=keyword&keyword=${encodeURIComponent(keyword)}`);
+        const data = await res.json();
+        if (res.ok && data.camps) data.camps.forEach(addResult);
+    } catch (err) {
+        console.error('고캠핑 이름검색 실패:', err);
+    }
+
+    // 고캠핑 미등록(보완 검색) 캠핑장 이름검색 — 검색어 그대로 + '캠핑장' 붙인 질의 둘 다 시도
+    const naverQueries = [...new Set([keyword, `${keyword} 캠핑장`])];
+    for (const q of naverQueries) {
+        try {
+            const res = await fetch(`/api/nearby-camps?keyword=${encodeURIComponent(q)}`);
+            const data = await res.json();
+            if (!res.ok || !data.items) continue;
+
+            const matched = data.items.filter((it) => it.name.includes(keyword)).slice(0, 5);
+            const geocoded = await Promise.all(matched.map(async (it) => {
+                const coord = await geocodeAddress(it.address);
+                if (!coord) return null;
+                return {
+                    name: it.name,
+                    category: '보완 검색 (고캠핑 미등록)',
+                    address: coord.address,
+                    lat: coord.lat,
+                    lng: coord.lng,
+                    tel: it.tel,
+                    placeUrl: `https://map.naver.com/p/search/${encodeURIComponent(it.name)}`,
+                    source: 'naver',
+                };
+            }));
+
+            geocoded.filter(Boolean).forEach((it) => {
+                const dupOfficial = results.some(
+                    (o) => o.source !== 'naver' && distanceMeters(o.lat, o.lng, it.lat, it.lng) < 300
+                );
+                if (!dupOfficial) addResult(it);
+            });
+        } catch (err) {
+            console.error('보완 검색 이름검색 실패:', err);
+        }
+    }
+
+    return results;
+}
+
+function showCampNameResults(camps) {
+    const officialCamps = camps.filter((c) => c.source !== 'naver');
+    const supplementaryCamps = camps.filter((c) => c.source === 'naver');
+    renderCamps(officialCamps);
+    if (supplementaryCamps.length) addMarkers(supplementaryCamps, ORANGE_ICON);
+
+    const listEl = document.getElementById('search-results');
+    listEl.innerHTML = '';
+
+    camps.forEach((item, index) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <div class="result-title">${item.name}</div>
+            <div class="result-sub">
+                <span class="result-category">${item.category}</span>
+                <span>${item.address}</span>
+            </div>
+        `;
+        li.onclick = () => {
+            hideResults();
+            map.setCenter(new naver.maps.LatLng(item.lat, item.lng));
+            map.setZoom(15);
+            openSheet(item);
+        };
+        listEl.appendChild(li);
+
+        if (index === 0) {
+            map.setCenter(new naver.maps.LatLng(item.lat, item.lng));
+            map.setZoom(15);
+            openSheet(item);
+        }
+    });
+
+    listEl.style.display = 'block';
+}
+
+// 이름으로 캠핑장을 못 찾았을 때의 지명(장소) 검색 폴백.
+// 네이버 지역검색 결과를 지역 단위로 묶어, 동명 지역이 여러 곳이면 목록으로 선택하게 하고
+// 한 곳뿐이면 바로 그 위치 주변 캠핑장을 보여준다.
+async function searchByPlaceName(keyword) {
+    try {
+        const res = await fetch(`/api/nearby-camps?keyword=${encodeURIComponent(keyword)}&raw=1`);
+        const data = await res.json();
+        if (res.ok && data.items && data.items.length) {
+            const candidates = await buildPlaceCandidates(data.items, keyword);
+            if (candidates.length > 1) {
+                showPlaceCandidates(keyword, candidates);
+                return true;
+            }
+            if (candidates.length === 1) {
+                await goToPlace(keyword, candidates[0]);
+                return true;
+            }
+        }
+    } catch (err) {
+        console.error('지역검색 기반 지명 검색 실패:', err);
+    }
+
+    // 지역검색으로도 못 찾았으면 네이버지도 지오코딩으로 한 번 더 시도한다.
     return new Promise((resolve) => {
         if (!naver.maps.Service) { resolve(false); return; }
         naver.maps.Service.geocode({ query: keyword }, async (status, response) => {
             const addresses = status === naver.maps.Service.Status.OK && response.v2 && response.v2.addresses;
-
-            if (addresses && addresses.length) {
-                const lat = parseFloat(addresses[0].y);
-                const lng = parseFloat(addresses[0].x);
-                map.setCenter(new naver.maps.LatLng(lat, lng));
-                map.setZoom(12);
-                showStatus(`'${keyword}' 근처 캠핑장을 찾았어요`, false, 2500);
-                await fetchCampsAt(lat, lng, 15000);
-                resolve(true);
+            if (!addresses || !addresses.length) {
+                resolve(false);
                 return;
             }
-
-            const fallback = await searchByLandmarkName(keyword);
-            resolve(fallback);
+            const best = addresses[0];
+            await goToPlace(keyword, {
+                address: best.roadAddress || best.jibunAddress || keyword,
+                lat: parseFloat(best.y),
+                lng: parseFloat(best.x),
+            });
+            resolve(true);
         });
     });
 }
 
-async function searchByLandmarkName(keyword) {
-    try {
-        const res = await fetch(`/api/nearby-camps?keyword=${encodeURIComponent(keyword)}&raw=1`);
-        const data = await res.json();
-        if (!res.ok || !data.items || !data.items.length) return false;
+// 검색어가 이름에 포함된 지역검색 결과를 지오코딩한 뒤, 같은 지역(주소 앞 2단어)끼리 묶어
+// 서로 다른 지역만 후보로 남긴다 (동명이지만 실제로는 같은 곳인 중복 항목 제거).
+async function buildPlaceCandidates(items, keyword) {
+    const relevant = items.filter((it) => it.name.includes(keyword)).slice(0, 8);
+    const geocoded = await Promise.all(relevant.map(async (it) => {
+        const coord = await geocodeAddress(it.address);
+        if (!coord) return null;
+        return { name: it.name, address: coord.address, lat: coord.lat, lng: coord.lng };
+    }));
 
-        const best = data.items.find((it) => it.name.includes(keyword)) || data.items[0];
-        const coord = await geocodeAddress(best.address);
-        if (!coord) return false;
+    const seenRegions = new Map();
+    geocoded.filter(Boolean).forEach((c) => {
+        const regionKey = c.address.split(/\s+/).slice(0, 2).join(' ');
+        if (!seenRegions.has(regionKey)) seenRegions.set(regionKey, c);
+    });
+    return [...seenRegions.values()];
+}
 
-        map.setCenter(new naver.maps.LatLng(coord.lat, coord.lng));
-        map.setZoom(12);
-        showStatus(`'${keyword}' 근처 캠핑장을 찾았어요`, false, 2500);
-        await fetchCampsAt(coord.lat, coord.lng, 15000);
-        return true;
-    } catch (err) {
-        console.error('지명 검색 폴백 실패:', err);
-        return false;
-    }
+async function goToPlace(keyword, place) {
+    map.setCenter(new naver.maps.LatLng(place.lat, place.lng));
+    map.setZoom(12);
+    showStatus(`'${keyword}' 근처 캠핑장을 찾았어요`, false, 2500);
+    await fetchCampsAt(place.lat, place.lng, 15000);
+}
+
+function showPlaceCandidates(keyword, candidates) {
+    const listEl = document.getElementById('search-results');
+    listEl.innerHTML = '';
+    candidates.forEach((c) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <div class="result-title">${keyword}</div>
+            <div class="result-sub"><span>${c.address}</span></div>
+        `;
+        li.onclick = async () => {
+            hideResults();
+            await goToPlace(keyword, c);
+        };
+        listEl.appendChild(li);
+    });
+    listEl.style.display = 'block';
+    showStatus(`'${keyword}'이(가) 여러 지역에 있어요. 목록에서 선택해주세요.`, false, 3500);
 }
 
 async function fetchCampsAt(lat, lng, radius) {
