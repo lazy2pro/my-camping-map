@@ -494,12 +494,12 @@ function makePinIcon(color) {
 // selected=true면 살짝 커지고 파란 광채(halo)가 도는 강조 버전을 만든다.
 function makeFuelPinIcon(selected) {
     const color = '#1c7ed6';
-    const scale = selected ? 1.4 : 1;
+    const scale = selected ? 2.2 : 1;
     const w = 30 * scale;
     const h = 40 * scale;
     const glow = selected
-        ? `<circle cx="15" cy="15" r="13" fill="none" stroke="#74c0fc" stroke-width="3" opacity="0.9"/>
-           <circle cx="15" cy="15" r="13" fill="#74c0fc" opacity="0.25"/>`
+        ? `<circle cx="15" cy="15" r="13" fill="none" stroke="#ff3b3b" stroke-width="3" opacity="0.95"/>
+           <circle cx="15" cy="15" r="13" fill="#ff3b3b" opacity="0.3"/>`
         : '';
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 30 40">
         ${glow}
