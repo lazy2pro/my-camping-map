@@ -93,6 +93,7 @@
         .camp-title { margin: 0; font-size: 18px; font-weight: bold; color: #111; }
         .camp-category { font-size: 12px; color: #2b8a3e; font-weight: 600; margin-bottom: 4px; }
         .camp-address { margin: 0 0 8px 0; color: #666; font-size: 13px; line-height: 1.4; }
+        .fuel-price { font-size: 22px; font-weight: bold; color: #1c7ed6; }
         .camp-tel { margin: 0 0 16px 0; color: #666; font-size: 13px; }
         .close-btn { background: none; border: none; font-size: 20px; color: #aaa; cursor: pointer; padding: 0; }
 
@@ -353,27 +354,20 @@ function openFuelSheet(station) {
 
     document.getElementById('camp-category').innerText = `⛽ ${station.brand || '주유소'} · 실내등유`;
     document.getElementById('camp-title').innerText = station.name;
-    document.getElementById('camp-address').innerText =
-        `${station.price.toLocaleString('ko-KR')}원/L · 약 ${Math.round(station.distance)}m 거리`;
+    // 가격이 가장 중요한 정보라 별도 span으로 크게 강조하고, 거리는 옆에 작게 붙인다.
+    document.getElementById('camp-address').innerHTML =
+        `<span class="fuel-price">${station.price.toLocaleString('ko-KR')}원/L</span> · 약 ${Math.round(station.distance)}m 거리`;
     document.getElementById('camp-tel').innerText = '';
 
     const btnRow = document.getElementById('reserve-btn-row');
     btnRow.innerHTML = '';
     btnRow.style.flexDirection = 'column';
 
-    const naverBtn = document.createElement('a');
-    naverBtn.href = `https://map.naver.com/p/search/${encodeURIComponent(station.name)}`;
-    naverBtn.target = '_blank';
-    naverBtn.rel = 'noopener';
-    naverBtn.className = 'reserve-btn primary';
-    naverBtn.innerText = '네이버지도에서 길찾기';
-    btnRow.appendChild(naverBtn);
-
     // 티맵 앱 딥링크(비공식 스킴). 앱이 설치돼 있으면 바로 목적지 경로안내로 연결되고,
     // 데스크톱이나 앱 미설치 환경에서는 별다른 동작 없이 무시된다.
     const tmapBtn = document.createElement('a');
     tmapBtn.href = `tmap://route?goalname=${encodeURIComponent(station.name)}&goalx=${station.lng}&goaly=${station.lat}`;
-    tmapBtn.className = 'reserve-btn secondary';
+    tmapBtn.className = 'reserve-btn primary';
     tmapBtn.innerText = '티맵으로 길찾기';
     btnRow.appendChild(tmapBtn);
 
