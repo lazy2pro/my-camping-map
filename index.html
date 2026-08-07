@@ -92,6 +92,14 @@
         }
         .fuel-list-tmap-btn:active { opacity: 0.8; }
 
+        /* 모바일 화면에서는 리스트가 너무 커지지 않도록 가격·티맵 버튼만 남기고 나머지는 숨긴다 */
+        @media (max-width: 480px) {
+            #fuel-price-list { width: 150px; max-width: 42vw; }
+            #fuel-price-list li { padding: 8px; }
+            .fuel-list-name, .fuel-list-sub { display: none; }
+            .fuel-list-tmap-btn { flex: 0 0 42%; font-size: 11px; padding: 8px 2px; }
+        }
+
         #status-badge {
             position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
             z-index: 90; background: rgba(0,0,0,0.7); color: white;
