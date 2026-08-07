@@ -65,23 +65,32 @@
 
         #fuel-price-list {
             position: fixed; top: 76px; right: 16px; bottom: 30px; z-index: 95;
-            width: 230px; max-width: 45vw;
+            width: 290px; max-width: 60vw;
             background: white; border-radius: 12px;
             box-shadow: 0 4px 16px rgba(0,0,0,0.2);
             overflow-y: auto; display: none; padding: 0; margin: 0; list-style: none;
         }
         #fuel-price-list.active { display: block; }
         #fuel-price-list li {
-            padding: 10px 12px; border-bottom: 1px solid #f1f3f5;
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 10px; border-bottom: 1px solid #f1f3f5;
             cursor: pointer; transition: background 0.15s;
         }
         #fuel-price-list li:last-child { border-bottom: none; }
-        #fuel-price-list li:active { background: #e7f5ff; }
+        #fuel-price-list li:active,
+        #fuel-price-list li.selected { background: #e7f5ff; }
+        .fuel-list-info { flex: 1 1 auto; min-width: 0; }
         .fuel-list-top { display: flex; align-items: baseline; gap: 6px; }
         .fuel-list-rank { color: #1c7ed6; font-weight: bold; font-size: 12px; flex-shrink: 0; }
         .fuel-list-price { font-weight: bold; font-size: 16px; color: #1c7ed6; }
         .fuel-list-name { font-size: 12.5px; color: #333; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .fuel-list-sub { font-size: 11px; color: #888; margin-top: 1px; }
+        .fuel-list-tmap-btn {
+            flex: 0 0 30%; text-align: center; text-decoration: none;
+            background: #1c7ed6; color: white; font-size: 12px; font-weight: bold;
+            padding: 10px 4px; border-radius: 8px; white-space: nowrap;
+        }
+        .fuel-list-tmap-btn:active { opacity: 0.8; }
 
         #status-badge {
             position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
@@ -278,7 +287,8 @@ async function fetchCampsData(lat, lng, radius, signal) {
 
 // ---- 등유(실내등유) 가격 레이어 ----
 let fuelLayerActive = false;
-let fuelMarkers = [];
+let fuelMarkers = []; // { marker, station } 쌍으로 관리 (선택 강조 시 아이콘 교체를 위해)
+let selectedFuelId = null;
 const fuelCache = new Map();
 const FUEL_CACHE_TTL_MS = 30 * 60 * 1000; // 오피넷 응답도 30분 캐시되므로 클라이언트도 동일하게 맞춘다
 const FUEL_CACHE_LIMIT = 50;
@@ -312,11 +322,12 @@ async function fetchFuelStations(lat, lng, radius) {
 }
 
 function clearFuelMarkers() {
-    fuelMarkers.forEach((marker) => {
+    fuelMarkers.forEach(({ marker }) => {
         naver.maps.Event.clearInstanceListeners(marker);
         marker.setMap(null);
     });
     fuelMarkers = [];
+    selectedFuelId = null;
 }
 
 function renderFuelStations(stations) {
@@ -330,14 +341,41 @@ function renderFuelStations(stations) {
         });
         naver.maps.Event.addListener(marker, 'click', () => {
             hideResults();
+            setFuelSelection(station.id);
             openFuelSheet(station);
         });
-        fuelMarkers.push(marker);
+        fuelMarkers.push({ marker, station });
     });
     renderFuelPriceList(stations);
 }
 
-// 지도 우측에 가격 낮은 순으로 정렬된 리스트를 그린다. 항목을 누르면 해당 주유소로 이동+시트를 연다.
+// 지도는 그대로 둔 채, 선택된 주유소 마커만 살짝 커지고 파란 광채가 도는 강조 아이콘으로 바꾼다.
+// 동시에 우측 리스트에서도 해당 항목에 선택 표시를 한다. (지도 이동/줌 없음)
+function setFuelSelection(stationId) {
+    if (selectedFuelId === stationId) return;
+
+    const prevEntry = fuelMarkers.find((m) => m.station.id === selectedFuelId);
+    if (prevEntry) prevEntry.marker.setIcon(FUEL_ICON);
+
+    selectedFuelId = stationId;
+
+    if (stationId != null) {
+        const entry = fuelMarkers.find((m) => m.station.id === stationId);
+        if (entry) entry.marker.setIcon(FUEL_ICON_SELECTED);
+    }
+
+    document.querySelectorAll('#fuel-price-list li').forEach((li) => {
+        li.classList.toggle('selected', li.dataset.stationId === String(stationId));
+    });
+}
+
+function tmapUrl(station) {
+    return `tmap://route?goalname=${encodeURIComponent(station.name)}&goalx=${station.lng}&goaly=${station.lat}`;
+}
+
+// 지도 우측에 가격 낮은 순으로 정렬된 리스트를 그린다.
+// 항목에 마우스를 올리거나 누르면 지도는 그대로 둔 채 해당 마커만 강조되고,
+// 오른쪽의 작은 '티맵' 버튼으로 지도 이동 없이 바로 경로안내를 보낼 수 있다.
 function renderFuelPriceList(stations) {
     const listEl = document.getElementById('fuel-price-list');
     if (!stations || stations.length === 0) {
@@ -350,19 +388,21 @@ function renderFuelPriceList(stations) {
     listEl.innerHTML = '';
     sorted.forEach((station, index) => {
         const li = document.createElement('li');
+        li.dataset.stationId = station.id;
         li.innerHTML = `
-            <div class="fuel-list-top">
-                <span class="fuel-list-rank">${index + 1}</span>
-                <span class="fuel-list-price">${station.price.toLocaleString('ko-KR')}원</span>
+            <div class="fuel-list-info">
+                <div class="fuel-list-top">
+                    <span class="fuel-list-rank">${index + 1}</span>
+                    <span class="fuel-list-price">${station.price.toLocaleString('ko-KR')}원</span>
+                </div>
+                <div class="fuel-list-name">${station.name}</div>
+                <div class="fuel-list-sub">${station.brand || ''}${station.brand ? ' · ' : ''}약 ${Math.round(station.distance)}m</div>
             </div>
-            <div class="fuel-list-name">${station.name}</div>
-            <div class="fuel-list-sub">${station.brand || ''}${station.brand ? ' · ' : ''}약 ${Math.round(station.distance)}m</div>
+            <a class="fuel-list-tmap-btn">티맵</a>
         `;
-        li.onclick = () => {
-            map.setCenter(new naver.maps.LatLng(station.lat, station.lng));
-            map.setZoom(16);
-            openFuelSheet(station);
-        };
+        li.addEventListener('mouseenter', () => setFuelSelection(station.id));
+        li.addEventListener('click', () => setFuelSelection(station.id));
+        li.querySelector('.fuel-list-tmap-btn').href = tmapUrl(station);
         listEl.appendChild(li);
     });
     listEl.classList.add('active');
@@ -451,20 +491,29 @@ function makePinIcon(color) {
 }
 
 // 등유 판매 주유소용 핀 — 같은 모양에 흰 원 대신 주유기(⛽) 아이콘을 넣어 캠핑장 핀과 구분한다.
-function makeFuelPinIcon() {
+// selected=true면 살짝 커지고 파란 광채(halo)가 도는 강조 버전을 만든다.
+function makeFuelPinIcon(selected) {
     const color = '#1c7ed6';
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 30 40">
+    const scale = selected ? 1.4 : 1;
+    const w = 30 * scale;
+    const h = 40 * scale;
+    const glow = selected
+        ? `<circle cx="15" cy="15" r="13" fill="none" stroke="#74c0fc" stroke-width="3" opacity="0.9"/>
+           <circle cx="15" cy="15" r="13" fill="#74c0fc" opacity="0.25"/>`
+        : '';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 30 40">
+        ${glow}
         <path d="M15 0C6.7 0 0 6.7 0 15c0 11 15 25 15 25s15-14 15-25C30 6.7 23.3 0 15 0z" fill="${color}"/>
         <circle cx="15" cy="15" r="9" fill="white"/>
         <text x="15" y="16" font-size="13" text-anchor="middle" dominant-baseline="middle">&#9981;</text>
     </svg>`;
     return {
         url: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg),
-        size: new naver.maps.Size(30, 40),
-        anchor: new naver.maps.Point(15, 40),
+        size: new naver.maps.Size(w, h),
+        anchor: new naver.maps.Point(w / 2, h),
     };
 }
-let GREEN_ICON, ORANGE_ICON, FUEL_ICON;
+let GREEN_ICON, ORANGE_ICON, FUEL_ICON, FUEL_ICON_SELECTED;
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
     const R = 6371000;
@@ -483,7 +532,8 @@ function initMap() {
 
     GREEN_ICON = makePinIcon('#2b8a3e');
     ORANGE_ICON = makePinIcon('#e8590c');
-    FUEL_ICON = makeFuelPinIcon();
+    FUEL_ICON = makeFuelPinIcon(false);
+    FUEL_ICON_SELECTED = makeFuelPinIcon(true);
 
     naver.maps.Event.addListener(map, 'click', () => {
         closeSheet();
