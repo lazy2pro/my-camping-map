@@ -1034,9 +1034,6 @@ function openSheet(item) {
     telEl.innerText = item.tel ? `☎ ${item.tel}` : '';
 
     const buttons = [];
-    // '상세정보 보기'(placeUrl)가 이미 네이버지도 검색 링크와 동일하므로,
-    // 그 경우 하단에 중복되는 '네이버지도에서 보기' 버튼은 생략한다.
-    let naverMapButtonNeeded = true;
 
     // 고캠핑의 resveUrl/homepage가 이미 캠핏·땡큐캠핑 링크라면 미리 찾아둔다.
     // - 이 링크를 '예약하기/홈페이지' 버튼과 '캠핏/땡큐캠핑' 버튼에 중복 표시하지 않기 위해서(아래에서 사용)
@@ -1055,7 +1052,6 @@ function openSheet(item) {
         addrEl.innerText += ' (고캠핑 미등록 · 보완 검색 정보)';
         if (item.placeUrl) {
             buttons.push({ href: item.placeUrl, label: '상세정보 보기', cls: 'primary' });
-            naverMapButtonNeeded = false;
         }
     } else if (!primaryDuplicatesSiteButton && isReservationWorthyUrl(item.resveUrl)) {
         buttons.push({
@@ -1102,13 +1098,14 @@ function openSheet(item) {
         });
     }
 
-    if (naverMapButtonNeeded) {
-        buttons.push({
-            href: `https://map.naver.com/p/search/${encodeURIComponent(item.name)}`,
-            label: '네이버지도에서 보기',
-            cls: 'secondary',
-        });
-    }
+    // 티맵 앱 딥링크(비공식 스킴)로 바로 경로안내. 지도 이동 없이 앱만 열리므로
+    // 다른 버튼과 겹치는 정보가 아니라 항상 추가한다.
+    buttons.push({
+        href: `tmap://route?goalname=${encodeURIComponent(item.name)}&goalx=${item.lng}&goaly=${item.lat}`,
+        label: '티맵으로 안내',
+        cls: 'secondary',
+        noTarget: true, // 커스텀 스킴 링크라 target=_blank를 붙이면 오히려 안 열리는 브라우저가 있다
+    });
 
     btnRow.innerHTML = '';
     btnRow.style.flexDirection = 'column';
@@ -1118,8 +1115,10 @@ function openSheet(item) {
             a.dataset.pending = '1';
         } else {
             a.href = b.href;
-            a.target = '_blank';
-            a.rel = 'noopener';
+            if (!b.noTarget) {
+                a.target = '_blank';
+                a.rel = 'noopener';
+            }
         }
         a.className = `reserve-btn ${b.cls}`;
         a.innerText = b.label;
