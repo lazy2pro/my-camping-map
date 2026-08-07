@@ -360,13 +360,22 @@ function openFuelSheet(station) {
     const btnRow = document.getElementById('reserve-btn-row');
     btnRow.innerHTML = '';
     btnRow.style.flexDirection = 'column';
-    const a = document.createElement('a');
-    a.href = `https://map.naver.com/p/search/${encodeURIComponent(station.name)}`;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.className = 'reserve-btn primary';
-    a.innerText = '네이버지도에서 길찾기';
-    btnRow.appendChild(a);
+
+    const naverBtn = document.createElement('a');
+    naverBtn.href = `https://map.naver.com/p/search/${encodeURIComponent(station.name)}`;
+    naverBtn.target = '_blank';
+    naverBtn.rel = 'noopener';
+    naverBtn.className = 'reserve-btn primary';
+    naverBtn.innerText = '네이버지도에서 길찾기';
+    btnRow.appendChild(naverBtn);
+
+    // 티맵 앱 딥링크(비공식 스킴). 앱이 설치돼 있으면 바로 목적지 경로안내로 연결되고,
+    // 데스크톱이나 앱 미설치 환경에서는 별다른 동작 없이 무시된다.
+    const tmapBtn = document.createElement('a');
+    tmapBtn.href = `tmap://route?goalname=${encodeURIComponent(station.name)}&goalx=${station.lng}&goaly=${station.lat}`;
+    tmapBtn.className = 'reserve-btn secondary';
+    tmapBtn.innerText = '티맵으로 길찾기';
+    btnRow.appendChild(tmapBtn);
 
     // 캠핑장 시트용 비동기 예약버튼 업데이트(upgradeReservationButtons)가 이 시트에
     // 뒤늦게 반영되지 않도록 세대를 올려 무효화한다.
