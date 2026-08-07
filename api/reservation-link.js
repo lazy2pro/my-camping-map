@@ -4,6 +4,14 @@ const TARGET_SITES = {
   thankyoucamping: { pattern: /thankqcamping\.com/i, detailPath: /cseq=\d+/i },
 };
 
+// 캠핑장 이름 끝에 흔히 붙는 접미어. 검색엔진 상 실제 업체명 표기가
+// ('갈기산캠핑장' 검색 -> 실제 '갈기산펜션캠핑장') 이 접미어들만 다른 경우가 많아,
+// 후보 선택과 최종 검증 양쪽에서 이 접미어를 뗀 핵심 키워드로도 완화 매칭한다.
+const CAMP_SUFFIX_PATTERN = /(캠핑장|야영장|펜션|글램핑|캠핑존|리조트)+$/;
+function stripCampSuffix(normalizedName) {
+  return normalizedName.replace(CAMP_SUFFIX_PATTERN, '');
+}
+
 // 백엔드 외부 요청 타임아웃 Helper (Vercel Serverless 무한 대기 방지)
 async function fetchWithTimeout(resource, options = {}, timeoutMs = 3500) {
   const controller = new AbortController();
@@ -108,10 +116,14 @@ export default async function handler(req, res) {
 
     const fullCampName = hasCampSuffix ? normalizeText(cleanName) : normalizeText(cleanName + '캠핑장');
     const fullCampNameAlt = hasCampSuffix ? null : normalizeText(cleanName + '야영장');
-    
+    const coreCampName = stripCampSuffix(fullCampName);
+
     const snippetMatchesFullName = (it) => {
       const snippet = normalizeText(it.title) + normalizeText(it.description);
-      return snippet.includes(fullCampName) || (fullCampNameAlt && snippet.includes(fullCampNameAlt));
+      if (snippet.includes(fullCampName) || (fullCampNameAlt && snippet.includes(fullCampNameAlt))) return true;
+      // 완전일치 실패 시, 접미어를 뗀 핵심 키워드만이라도 있으면 후보로 인정한다
+      // (예: '갈기산캠핑장' 검색 -> 스니펫엔 '갈기산펜션캠핑장'만 있는 경우).
+      return coreCampName.length >= 2 && snippet.includes(coreCampName);
     };
 
     const [, officialValid] = await Promise.all([
@@ -135,7 +147,11 @@ export default async function handler(req, res) {
           candidateFound[key] = true;
           const verifyResult = await pageContainsName(found.link, cleanName);
           const isDetailPage = cfg.detailPath.test(found.link);
-          const trustedFallback = !verifyResult.checked && isDetailPage && regionOk !== false;
+          // camfit/땡큐캠핑 상세페이지가 클라이언트 렌더링(SPA)이라 실제 이름 텍스트가
+          // 정적 HTML엔 없을 수 있다. 그런 경우(verifyResult.checked=true인데 verified=false)라도
+          // 검색 스니펫 단계에서 이미 이름+지역이 모두 일치한 강한 후보라면 신뢰한다.
+          const strongCandidate = nameConfirmed && regionOk === true;
+          const trustedFallback = isDetailPage && regionOk !== false && (!verifyResult.checked || strongCandidate);
 
           if (regionOk !== false && (verifyResult.verified || trustedFallback)) {
             result[key] = found.link;
@@ -220,7 +236,7 @@ async function pageContainsName(url, name) {
       // 검색에 쓰인 이름과 실제 업체 표기가 접미어만 다른 경우
       // (예: '갈기산캠핑장' 검색 -> 실제 페이지는 '갈기산펜션캠핑장')
       // 완전일치가 실패해도 핵심 키워드가 페이지에 있으면 같은 곳으로 간주한다.
-      const core = normalizedName.replace(/(캠핑장|야영장|펜션|글램핑|캠핑존|리조트)+$/g, '');
+      const core = stripCampSuffix(normalizedName);
       if (core.length >= 2 && normalizedHtml.includes(core)) {
         found = true;
         reason = '핵심 키워드 일치 (접미어 차이 허용)';
