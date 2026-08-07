@@ -261,6 +261,8 @@ const fuelCache = new Map();
 const FUEL_CACHE_TTL_MS = 30 * 60 * 1000; // 오피넷 응답도 30분 캐시되므로 클라이언트도 동일하게 맞춘다
 const FUEL_CACHE_LIMIT = 50;
 const FUEL_API_BASE = '/api/kerosene';
+// 오피넷 API가 허용하는 최대 반경. 주유소는 캠핑장보다 드물어 줌 레벨과 무관하게 항상 이 값을 쓴다.
+const FUEL_SEARCH_RADIUS_M = 5000;
 
 function fuelCacheKey(lat, lng, radius) {
     const gridLat = Math.round(lat * 100) / 100;
@@ -315,8 +317,10 @@ function renderFuelStations(stations) {
 async function fetchFuelInView() {
     if (!map) return null;
     const center = map.getCenter();
-    // 오피넷 API 반경 제한(최대 5km)에 맞춘다. 너무 축소된 화면에서는 일부만 표시될 수 있다.
-    const radius = Math.min(calcRadiusFromZoom(), 5000);
+    // 주유소는 캠핑장보다 훨씬 드문드문 있어서, 줌 레벨에 따라 반경을 줄이면
+    // 확대했을 때 아무것도 안 보이는 경우가 많다. 오피넷 API가 허용하는
+    // 최대 반경(5km)을 줌 레벨과 무관하게 항상 사용한다.
+    const radius = FUEL_SEARCH_RADIUS_M;
     try {
         const stations = await fetchFuelStations(center.lat(), center.lng(), radius);
         renderFuelStations(stations);
