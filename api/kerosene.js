@@ -32,9 +32,25 @@ const BRAND_NAMES = {
   SKG: 'SK가스',
 };
 
+// 응답 키 대소문자가 문서와 다를 가능성에 대비한 대소문자 무관 탐색 헬퍼.
+function getCI(obj, name) {
+  if (!obj || typeof obj !== 'object') return undefined;
+  if (obj[name] !== undefined) return obj[name];
+  const key = Object.keys(obj).find((k) => k.toLowerCase() === name.toLowerCase());
+  return key ? obj[key] : undefined;
+}
+
+function extractItems(data) {
+  const resultObj = getCI(data, 'RESULT') || data;
+  const raw = getCI(resultObj, 'OIL');
+  if (!raw) return { items: [], resultObj };
+  return { items: Array.isArray(raw) ? raw : [raw], resultObj };
+}
+
 export default async function handler(req, res) {
   try {
-    const { lat, lng, radius } = req.query;
+    const { lat, lng, radius, debug } = req.query;
+    const isDebug = debug === '1';
     if (!lat || !lng) {
       return res.status(400).json({ error: 'lat, lng 파라미터가 필요합니다.' });
     }
@@ -64,6 +80,8 @@ export default async function handler(req, res) {
       sort: '2', // 거리순
       prodcd: 'C004', // 실내등유
       certkey,
+      // 일부 문서/예제는 'code' 파라미터명을 쓰기도 해 호환을 위해 함께 보낸다(있어도 무해).
+      code: certkey,
     });
     const url = `https://www.opinet.co.kr/api/aroundAll.do?${params.toString()}`;
 
@@ -84,35 +102,50 @@ export default async function handler(req, res) {
     } catch (e) {
       return res.status(502).json({
         error: '오피넷 API 응답을 해석할 수 없습니다 (인증키 문제일 수 있습니다).',
-        raw: rawText.slice(0, 300),
+        raw: rawText.slice(0, 500),
       });
     }
 
-    const rawItems = data?.RESULT?.OIL;
-    const items = Array.isArray(rawItems) ? rawItems : rawItems ? [rawItems] : [];
+    const { items, resultObj } = extractItems(data);
 
     const stations = items
       .map((it) => {
-        const gx = parseFloat(it.GIS_X_COOR);
-        const gy = parseFloat(it.GIS_Y_COOR);
+        const gx = parseFloat(getCI(it, 'GIS_X_COOR'));
+        const gy = parseFloat(getCI(it, 'GIS_Y_COOR'));
         if (!Number.isFinite(gx) || !Number.isFinite(gy)) return null;
         const coord = toWgs84(gx, gy);
         return {
-          id: it.UNI_ID,
-          name: it.OS_NM,
-          brand: BRAND_NAMES[it.POLL_DIV_CO] || it.POLL_DIV_CO || '',
-          price: Number(it.PRICE),
-          distance: Number(it.DISTANCE),
+          id: getCI(it, 'UNI_ID'),
+          name: getCI(it, 'OS_NM'),
+          brand: BRAND_NAMES[getCI(it, 'POLL_DIV_CO')] || getCI(it, 'POLL_DIV_CO') || '',
+          price: Number(getCI(it, 'PRICE')),
+          distance: Number(getCI(it, 'DISTANCE')),
           lat: coord.lat,
           lng: coord.lng,
         };
       })
       .filter(Boolean);
 
+    const payload = { stations };
+    if (isDebug) {
+      payload.debug = {
+        requestUrl: url.replace(certkey, '***'),
+        katecXY: { x, y },
+        upstreamStatus: apiRes.status,
+        rawItemCount: items.length,
+        resultKeys: resultObj ? Object.keys(resultObj) : [],
+        rawSample: rawText.slice(0, 800),
+      };
+    }
+
     // 유가는 하루 몇 차례 갱신되는 수준이라 30분 캐시로 오피넷 호출(일일 쿼터)을 아낀다.
-    res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
-    return res.status(200).json({ stations });
+    // 디버그 요청은 캐시하지 않는다.
+    if (!isDebug) {
+      res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
+    }
+    return res.status(200).json(payload);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 }
+
