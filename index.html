@@ -146,6 +146,25 @@ const NON_RESERVATION_HOSTS = [
     'tistory.com', 'brunch.co.kr', 'band.us'
 ];
 
+// 네이버 지역검색 결과 중 캠핑장 본체가 아니라 '입구/주차장/매표소' 같은
+// 부속 지점(랜드마크)만 별도로 잡히는 경우가 있어, 이런 이름은 보완 검색 결과에서 제외한다.
+const NON_CAMP_NAME_SUFFIX = /(입구|주차장|매표소|정문|후문|관리사무소|사무실|안내소)$/;
+
+// 고캠핑 등록 캠핑장이 공백/번호 표기 차이로 같은 곳이 중복 등록된 경우
+// (예: '선택적고립캠핑장' / '선택적 고립 캠핑장 1') 이름을 비교하기 위한 정규화.
+function normalizeCampNameForDedup(name) {
+    return (name || '').replace(/\s+/g, '').replace(/\d+$/, '');
+}
+
+// 중복 후보 중 예약/홈페이지/전화번호 등 실제 정보가 더 많은 쪽을 고른다.
+function campRichness(c) {
+    let score = 0;
+    if (c.resveUrl) score += 2;
+    if (c.homepage) score += 1;
+    if (c.tel) score += 1;
+    return score;
+}
+
 function isReservationWorthyUrl(url) {
     if (!url || !url.startsWith('http')) return false;
     try {
@@ -370,8 +389,12 @@ async function fetchNaverSupplementaryCamps(officialCamps, lat, lng, signal) {
 
         // 지오코딩은 좌표 확정을 위해 건당 1회 외부 API 호출이 발생하므로,
         // 팬(pan)마다 최대 15건을 모두 조회하지 않고 상위 8건으로 제한한다.
+        // '입구/주차장' 같은 부속 지점 이름은 캠핑장 본체가 아니므로 미리 제외한다.
         const geocoded = await Promise.all(
-            data.items.slice(0, 8).map(async (it) => {
+            data.items
+                .filter((it) => !NON_CAMP_NAME_SUFFIX.test(it.name))
+                .slice(0, 8)
+                .map(async (it) => {
                 const coord = await geocodeAddress(it.address);
                 if (!coord) return null;
                 return {
@@ -490,16 +513,32 @@ async function searchCampsByName(keyword) {
         results.push(item);
     };
 
-    // 고캠핑 등록 캠핑장 이름검색
+    // 고캠핑 등록 캠핑장 이름검색 — 공백/번호 표기만 다른 근접 중복 등록
+    // (예: '선택적고립캠핑장' / '선택적 고립 캠핑장 1')은 정보가 더 많은 쪽 하나로 합친다.
     try {
         const res = await fetch(`${API_BASE}?type=keyword&keyword=${encodeURIComponent(keyword)}`);
         const data = await res.json();
-        if (res.ok && data.camps) data.camps.forEach(addResult);
+        if (res.ok && data.camps) {
+            data.camps.forEach((camp) => {
+                const dupIndex = results.findIndex(
+                    (o) =>
+                        o.source !== 'naver' &&
+                        normalizeCampNameForDedup(o.name) === normalizeCampNameForDedup(camp.name) &&
+                        distanceMeters(o.lat, o.lng, camp.lat, camp.lng) < 200
+                );
+                if (dupIndex === -1) {
+                    addResult(camp);
+                } else if (campRichness(camp) > campRichness(results[dupIndex])) {
+                    results[dupIndex] = camp;
+                }
+            });
+        }
     } catch (err) {
         console.error('고캠핑 이름검색 실패:', err);
     }
 
-    // 고캠핑 미등록(보완 검색) 캠핑장 이름검색 — 검색어 그대로 + '캠핑장' 붙인 질의 둘 다 시도
+    // 고캠핑 미등록(보완 검색) 캠핑장 이름검색 — 검색어 그대로 + '캠핑장' 붙인 질의 둘 다 시도.
+    // '~입구/주차장'처럼 캠핑장 본체가 아닌 부속 지점 이름은 제외한다.
     const naverQueries = [...new Set([keyword, `${keyword} 캠핑장`])];
     for (const q of naverQueries) {
         try {
@@ -507,7 +546,9 @@ async function searchCampsByName(keyword) {
             const data = await res.json();
             if (!res.ok || !data.items) continue;
 
-            const matched = data.items.filter((it) => it.name.includes(keyword)).slice(0, 5);
+            const matched = data.items
+                .filter((it) => it.name.includes(keyword) && !NON_CAMP_NAME_SUFFIX.test(it.name))
+                .slice(0, 5);
             const geocoded = await Promise.all(matched.map(async (it) => {
                 const coord = await geocodeAddress(it.address);
                 if (!coord) return null;
