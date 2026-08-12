@@ -1788,6 +1788,8 @@ const FOOD_MEALS = [
 ];
 const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 let activeFoodTripId = null;
+// 저장된 음식 계획을 다시 고치기 전까지는 읽기 전용으로 보여주기 위한 화면 상태(저장되지 않음, 새로고침 시 초기화).
+let activeFoodEditing = false;
 
 function loadFoodData() {
     try {
@@ -1891,6 +1893,7 @@ function renderFoodView() {
 // 일정 선택이 바뀌면 음식 목록도 그 일정 것으로 바뀌고, 지도도 해당 캠핑장 위치로 이동한다.
 function onFoodTripChange() {
     activeFoodTripId = document.getElementById('food-trip-select').value;
+    activeFoodEditing = false;
     const trip = recordsData.upcoming.find((t) => t.id === activeFoodTripId);
     if (trip && map && trip.lat && trip.lng) {
         map.setCenter(new naver.maps.LatLng(trip.lat, trip.lng));
@@ -1904,12 +1907,20 @@ function onFoodTripChange() {
 // 선택된 일정의 입실~퇴실 기간을 날짜별 카드로 나열한다. 각 카드 안에 그 날짜에
 // 해당하는 끼니(입실일=점심·저녁만, 퇴실일=아침만, 그 외=세 끼 모두)를 전부 보여주고,
 // 각 끼니마다 −버튼으로 제외(항목은 보존되고 숨김), 제외된 끼니는 +버튼으로 다시 추가한다.
+// 이미 '저장'된 계획은 읽기전용 요약으로 보여주고, '수정' 버튼을 눌러야 다시 편집할 수 있다.
 function renderFoodDaysList() {
     const listEl = document.getElementById('food-days-list');
     listEl.innerHTML = '';
     if (!activeFoodTripId) return;
     const trip = recordsData.upcoming.find((t) => t.id === activeFoodTripId);
     if (!trip) return;
+
+    const bucket = ensureTripFoodBucket(activeFoodTripId);
+
+    if (bucket.saved && !activeFoodEditing) {
+        renderFoodReadOnly(trip, bucket);
+        return;
+    }
 
     const dates = generateDateRange(trip.startDate, trip.endDate);
     if (dates.length === 0) {
@@ -2002,7 +2013,87 @@ function renderFoodDaysList() {
 
         listEl.appendChild(card);
     });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'add-btn';
+    saveBtn.style.cssText = 'width:100%; padding:13px; font-size:14px; margin-top:4px;';
+    saveBtn.innerText = '💾 이 음식 계획 저장';
+    saveBtn.onclick = () => {
+        bucket.saved = true;
+        activeFoodEditing = false;
+        saveFoodData(foodData);
+        renderFoodDaysList();
+        renderRecordsUpcomingBadgeIfOpen();
+    };
+    listEl.appendChild(saveBtn);
 }
+
+// 저장된 음식 계획을 읽기 전용 요약으로 보여준다. 체크/추가/삭제는 할 수 없고,
+// '수정' 버튼을 눌러야 다시 편집 가능한 화면으로 전환된다.
+function renderFoodReadOnly(trip, bucket) {
+    const listEl = document.getElementById('food-days-list');
+    listEl.innerHTML = '';
+
+    const banner = document.createElement('div');
+    banner.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:#ebfbee; border-radius:10px; padding:10px 14px; margin-bottom:14px;';
+    banner.innerHTML = `
+        <span style="font-size:13px; color:#2b8a3e; font-weight:700;">✅ 저장된 음식 계획</span>
+        <button type="button" class="add-btn" style="padding:8px 14px; font-size:13px;">✏️ 수정</button>
+    `;
+    banner.querySelector('button').onclick = () => {
+        activeFoodEditing = true;
+        renderFoodDaysList();
+    };
+    listEl.appendChild(banner);
+
+    const dates = generateDateRange(trip.startDate, trip.endDate);
+    dates.forEach((dateStr) => {
+        const dow = WEEKDAY_LABELS[new Date(dateStr + 'T00:00:00').getDay()];
+        const isCheckIn = dateStr === trip.startDate;
+        const isCheckOut = !!trip.endDate && dateStr === trip.endDate;
+        const tags = [];
+        if (isCheckIn) tags.push('입실');
+        if (isCheckOut) tags.push('퇴실');
+        const tagLabel = tags.length ? ` · ${tags.join('/')}` : '';
+        const dateLabel = `${dateStr.slice(5).replace('-', '/')} (${dow})`;
+
+        const card = document.createElement('div');
+        card.className = 'food-day-card';
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'food-day-title';
+        titleEl.innerText = `${dateLabel}${tagLabel}`;
+        card.appendChild(titleEl);
+
+        mealsForDay(dateStr, trip).forEach((mealKey) => {
+            const dayMeals = bucket.days[dateStr] || {};
+            const entry = dayMeals[mealKey];
+            if (!entry || !entry.included) return;
+            const mealLabel = FOOD_MEALS.find((m) => m.key === mealKey).label;
+
+            const block = document.createElement('div');
+            block.className = 'food-meal-block';
+            const itemsHtml = entry.items.length
+                ? entry.items.map((item) => `<div class="item-name${item.checked ? ' checked' : ''}" style="padding:3px 0;">${item.name}</div>`).join('')
+                : '<div style="color:#adb5bd; font-size:12.5px; padding:4px 0;">등록된 메뉴가 없어요.</div>';
+            block.innerHTML = `
+                <div class="food-meal-header"><span>${mealLabel}</span></div>
+                ${itemsHtml}
+            `;
+            card.appendChild(block);
+        });
+
+        listEl.appendChild(card);
+    });
+}
+
+// 캠핑 기록 패널이 지금 열려있다면(저장 직후) 예정 일정 카드의 '음식 계획 저장됨' 배지도 바로 갱신한다.
+function renderRecordsUpcomingBadgeIfOpen() {
+    const panel = document.getElementById('view-records');
+    if (panel && panel.classList.contains('active')) renderRecordsView();
+}
+
 
 // 특정 일정 · 날짜 · 끼니에 메뉴를 추가하는 공통 로직. 직접 입력한 값이든,
 // 즐겨찾는 메뉴에서 불러온 값이든 여기로 모인다.
@@ -2243,7 +2334,9 @@ function switchRecordsTab(tab) {
 
 function recordDateRangeLabel(rec) {
     if (!rec.startDate) return '';
-    return (rec.endDate && rec.endDate !== rec.startDate) ? `${rec.startDate} ~ ${rec.endDate}` : rec.startDate;
+    if (!rec.endDate || rec.endDate === rec.startDate) return `${rec.startDate} (당일)`;
+    const nights = generateDateRange(rec.startDate, rec.endDate).length - 1;
+    return `${rec.startDate} ~ ${rec.endDate} (${nights}박 ${nights + 1}일)`;
 }
 
 function renderRecordsView() {
@@ -2256,6 +2349,7 @@ function renderRecordsView() {
         upcomingList.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:12px 0;">등록된 예정 일정이 없어요.</div>';
     }
     sortedUpcoming.forEach((rec) => {
+        const foodSaved = !!(foodData.trips[rec.id] && foodData.trips[rec.id].saved);
         const card = document.createElement('div');
         card.className = 'record-card';
         card.innerHTML = `
@@ -2264,6 +2358,7 @@ function renderRecordsView() {
                 <button class="item-del-btn">✕</button>
             </div>
             <div class="record-dates">${recordDateRangeLabel(rec)}</div>
+            ${foodSaved ? `<div style="font-size:11.5px; color:#2b8a3e; font-weight:700; margin-top:4px;">🍳 음식 계획 저장됨</div>` : ''}
             ${rec.site ? `<a class="record-link" href="${rec.site}" target="_blank" rel="noopener">🔗 사이트 바로가기</a>` : ''}
             ${rec.note ? `<div class="record-note">${rec.note}</div>` : ''}
         `;
