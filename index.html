@@ -369,12 +369,16 @@
 
         <div style="margin-top:28px; border-top:1px solid #e9ecef; padding-top:20px;">
             <h3 style="margin:0 0 10px; font-size:15px; color:#111;">⭐ 즐겨찾는 메뉴/밀키트</h3>
-            <select id="food-preset-target-day" class="add-input" style="margin-bottom:10px;"></select>
-            <div id="food-preset-list"></div>
+            <div style="font-size:12px; color:#888; margin-bottom:6px;">밀키트 내역</div>
+            <div style="display:flex; gap:8px; margin-bottom:14px;">
+                <select id="food-preset-history" class="add-input" style="flex:1;"></select>
+                <button class="item-del-btn" onclick="deleteSelectedPreset()" title="선택한 밀키트 삭제" style="flex-shrink:0;">✕</button>
+            </div>
             <div class="add-row">
                 <input type="text" id="food-preset-input" class="add-input" placeholder="자주 먹는 메뉴/밀키트 저장 (예: 짜파구리 밀키트)" onkeyup="if(event.keyCode===13) addFoodPreset();">
                 <button class="add-btn" onclick="addFoodPreset()">저장</button>
             </div>
+            <datalist id="food-presets-datalist"></datalist>
         </div>
 
         <div id="food-restaurant-section" style="margin-top:28px; border-top:1px solid #e9ecef; padding-top:20px;">
@@ -1677,6 +1681,8 @@ document.addEventListener('click', (e) => {
 const MAP_ONLY_ELEMENT_IDS = ['fuel-price-list'];
 
 function switchView(view) {
+    archivePastTrips();
+
     ['map', 'food', 'records', 'gear'].forEach((v) => {
         const btn = document.getElementById(`sidebar-btn-${v}`);
         if (btn) btn.classList.toggle('active', v === view);
@@ -1835,11 +1841,8 @@ function renderFoodDaysList() {
     const dates = generateDateRange(trip.startDate, trip.endDate);
     if (dates.length === 0) {
         listEl.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:12px 0;">이 일정에는 날짜가 없어요. 캠핑 기록에서 시작일을 먼저 입력해주세요.</div>';
-        updatePresetTargetOptions([]);
         return;
     }
-
-    const targetOptions = []; // 즐겨찾기 대상 드롭다운용 { dateStr, mealKey, label }
 
     dates.forEach((dateStr) => {
         const dow = WEEKDAY_LABELS[new Date(dateStr + 'T00:00:00').getDay()];
@@ -1864,8 +1867,6 @@ function renderFoodDaysList() {
             const mealLabel = FOOD_MEALS.find((m) => m.key === mealKey).label;
 
             if (entry.included) {
-                targetOptions.push({ dateStr, mealKey, label: `${dateLabel} ${mealLabel}` });
-
                 const block = document.createElement('div');
                 block.className = 'food-meal-block';
                 block.innerHTML = `
@@ -1875,7 +1876,7 @@ function renderFoodDaysList() {
                     </div>
                     <div class="food-meal-items"></div>
                     <div class="add-row">
-                        <input type="text" class="add-input food-meal-input" placeholder="메뉴/재료 추가">
+                        <input type="text" class="add-input food-meal-input" placeholder="메뉴/재료 추가 (즐겨찾기에서 선택 가능)" list="food-presets-datalist" autocomplete="off">
                         <button class="add-btn food-meal-add-btn">추가</button>
                     </div>
                 `;
@@ -1924,8 +1925,6 @@ function renderFoodDaysList() {
 
         listEl.appendChild(card);
     });
-
-    updatePresetTargetOptions(targetOptions);
 }
 
 // 특정 일정 · 날짜 · 끼니에 메뉴를 추가하는 공통 로직. 직접 입력한 값이든,
@@ -1973,46 +1972,24 @@ function saveFoodPresets(data) {
 }
 let foodPresets = loadFoodPresets();
 
-// 즐겨찾기를 어느 날짜·끼니에 추가할지 고르는 드롭다운을 채운다. (현재 포함되어 있는 끼니만 후보)
-function updatePresetTargetOptions(options) {
-    const select = document.getElementById('food-preset-target-day');
-    if (!select) return;
-    if (!options || options.length === 0) {
-        select.innerHTML = '<option value="">추가할 끼니가 없어요</option>';
-        select.disabled = true;
-        return;
-    }
-    select.disabled = false;
-    const prevValue = select.value;
-    select.innerHTML = options.map((opt) => `<option value="${opt.dateStr}|${opt.mealKey}">${opt.label}에 추가</option>`).join('');
-    if (options.some((opt) => `${opt.dateStr}|${opt.mealKey}` === prevValue)) select.value = prevValue;
-}
-
+// 저장된 밀키트를 '밀키트 내역' 드롭다운과, 각 끼니 입력창의 자동완성(datalist)에 반영한다.
 function renderFoodPresets() {
-    const listEl = document.getElementById('food-preset-list');
-    listEl.innerHTML = '';
+    const historySelect = document.getElementById('food-preset-history');
+    const datalist = document.getElementById('food-presets-datalist');
+
     if (foodPresets.length === 0) {
-        listEl.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:8px 0;">저장된 메뉴가 없어요. 자주 먹는 밀키트나 레시피를 등록해보세요.</div>';
-        return;
+        historySelect.innerHTML = '<option value="">저장된 밀키트가 없어요</option>';
+        historySelect.disabled = true;
+    } else {
+        historySelect.disabled = false;
+        const prevValue = historySelect.value;
+        historySelect.innerHTML = foodPresets.map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
+        if (foodPresets.some((p) => p.id === prevValue)) historySelect.value = prevValue;
     }
-    foodPresets.forEach((preset) => {
-        const card = document.createElement('div');
-        card.className = 'item-card';
-        card.innerHTML = `
-            <span class="item-name">${preset.name}</span>
-            <button class="add-btn" style="padding:6px 12px; font-size:12px;" title="위에서 고른 날짜/끼니에 추가">추가</button>
-            <button class="item-del-btn">✕</button>
-        `;
-        card.querySelector('.add-btn').onclick = () => {
-            const select = document.getElementById('food-preset-target-day');
-            const val = select ? select.value : '';
-            if (!val) { alert('먼저 추가할 날짜/끼니를 선택해주세요.'); return; }
-            const [dateStr, mealKey] = val.split('|');
-            addFoodItemToMeal(dateStr, mealKey, preset.name);
-        };
-        card.querySelector('.item-del-btn').onclick = () => deleteFoodPreset(preset.id);
-        listEl.appendChild(card);
-    });
+
+    if (datalist) {
+        datalist.innerHTML = foodPresets.map((p) => `<option value="${p.name}"></option>`).join('');
+    }
 }
 
 function addFoodPreset() {
@@ -2024,7 +2001,13 @@ function addFoodPreset() {
     input.value = '';
     renderFoodPresets();
 }
-function deleteFoodPreset(id) {
+
+function deleteSelectedPreset() {
+    const select = document.getElementById('food-preset-history');
+    const id = select ? select.value : '';
+    if (!id) return;
+    const preset = foodPresets.find((p) => p.id === id);
+    if (preset && !confirm(`'${preset.name}'을(를) 즐겨찾기에서 삭제할까요?`)) return;
     foodPresets = foodPresets.filter((p) => p.id !== id);
     saveFoodPresets(foodPresets);
     renderFoodPresets();
@@ -2109,6 +2092,72 @@ function saveRecordsData(data) {
     try { localStorage.setItem(RECORDS_STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
 }
 let recordsData = loadRecordsData();
+
+// 퇴실일(없으면 시작일) 낮 12시가 지난 예정 일정은 자동으로 '지난 기록'으로 옮긴다.
+// id를 그대로 유지해서 foodData.trips[id]에 저장된 음식 계획이 계속 연결되게 하고,
+// 그 계획을 사람이 읽을 수 있는 요약으로 만들어 메모에 함께 남긴다.
+function checkoutDeadline(trip) {
+    const dateStr = trip.endDate || trip.startDate;
+    if (!dateStr) return null;
+    const d = new Date(dateStr + 'T12:00:00');
+    return isNaN(d) ? null : d;
+}
+
+function buildFoodSummaryForTrip(tripId) {
+    const bucket = foodData.trips[tripId];
+    if (!bucket || !bucket.days) return '';
+    const lines = [];
+    Object.keys(bucket.days).sort().forEach((dateStr) => {
+        const dayMeals = bucket.days[dateStr];
+        const dow = WEEKDAY_LABELS[new Date(dateStr + 'T00:00:00').getDay()];
+        FOOD_MEALS.forEach((meal) => {
+            const entry = dayMeals[meal.key];
+            if (entry && entry.included && entry.items && entry.items.length) {
+                const names = entry.items.map((i) => i.name).join(', ');
+                lines.push(`${dateStr.slice(5).replace('-', '/')} (${dow}) ${meal.label}: ${names}`);
+            }
+        });
+    });
+    return lines.length ? `🍳 먹은 메뉴\n${lines.join('\n')}` : '';
+}
+
+function buildHistoryFromTrip(trip) {
+    const foodSummary = buildFoodSummaryForTrip(trip.id);
+    const noteParts = [];
+    if (trip.note) noteParts.push(trip.note);
+    if (foodSummary) noteParts.push(foodSummary);
+    return {
+        id: trip.id, // 같은 id 유지 -> 음식 계획(foodData)이 계속 연결됨
+        campName: trip.title,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        note: noteParts.join('\n\n'),
+    };
+}
+
+function archivePastTrips() {
+    if (!recordsData.upcoming.length) return false;
+    const now = new Date();
+    const stillUpcoming = [];
+    let changed = false;
+
+    recordsData.upcoming.forEach((trip) => {
+        const deadline = checkoutDeadline(trip);
+        if (deadline && now >= deadline) {
+            recordsData.history.push(buildHistoryFromTrip(trip));
+            if (activeFoodTripId === trip.id) activeFoodTripId = null;
+            changed = true;
+        } else {
+            stillUpcoming.push(trip);
+        }
+    });
+
+    if (changed) {
+        recordsData.upcoming = stillUpcoming;
+        saveRecordsData(recordsData);
+    }
+    return changed;
+}
 
 function switchRecordsTab(tab) {
     activeRecordsTab = tab;
