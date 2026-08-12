@@ -173,51 +173,70 @@
         /* 좁은 화면(모바일)에서는 폭 고정 때문에 패널 왼쪽이 좌측 사이드바(64px) 밑에 가려지므로,
            사이드바 오른쪽부터 시작하도록 좌우 폭을 새로 잡아준다. */
         @media (max-width: 560px) {
+            #sidebar { width: 56px; }
+            .sidebar-btn { width: 48px; height: 50px; font-size: 9.5px; gap: 3px; }
+            .sidebar-btn .sidebar-icon { font-size: 18px; }
+            .search-wrapper { left: 68px; }
+            #legend { left: 68px; }
             .app-view {
-                left: 84px;
-                right: 12px;
+                left: 68px;
+                right: 10px;
                 width: auto;
                 max-width: none;
             }
-            /* 모바일에서는 카드/줄 간격과 폰트가 커서 스크롤이 과하게 길어지므로 전반적으로 좁혀준다. */
-            .view-header { padding: 10px 12px 8px; }
-            .view-header h2 { font-size: 15px; }
-            .view-body { padding: 4px 12px 16px; }
-            .tab-row { gap: 6px; margin-bottom: 10px; }
-            .tab-btn { padding: 7px; font-size: 12px; }
+            /* 모바일(아이폰16 프로 393px 기준)에서는 여백/줄간격/폰트가 훨씬 촘촘해야 한다.
+               단, 입력창(.add-input) 폰트는 16px 밑으로 내리면 iOS가 포커스 시 자동 확대해버리므로 유지한다. */
+            .view-header { padding: 8px 10px 6px; }
+            .view-header h2 { font-size: 14px; }
+            .view-body { padding: 2px 10px 14px; }
+            .tab-row { gap: 5px; margin-bottom: 8px; }
+            .tab-btn { padding: 6px; font-size: 11px; }
 
             .food-day-card, .record-card, .item-card {
-                padding: 9px 11px; margin-bottom: 6px; border-radius: 10px;
+                padding: 7px 9px; margin-bottom: 5px; border-radius: 9px;
             }
-            .food-day-title { font-size: 12px; }
-            .food-meal-block { margin-top: 6px; padding-top: 6px; }
-            .food-meal-header { margin-bottom: 3px; }
-            .food-meal-header span { font-size: 11.5px; }
-            .food-meal-restore-btn { margin-top: 6px; padding: 7px; font-size: 11.5px; }
-            .item-checkbox { width: 17px; height: 17px; }
-            .item-name { font-size: 12.5px; }
-            .item-del-btn { font-size: 15px; }
-            .add-row { margin-top: 4px; gap: 6px; }
-            .add-input { padding: 7px 9px; font-size: 12.5px; }
-            .add-btn { padding: 0 10px; font-size: 12.5px; }
+            .food-day-title { font-size: 11px; }
+            .food-meal-block { margin-top: 5px; padding-top: 5px; }
+            .food-meal-header { margin-bottom: 2px; }
+            .food-meal-header span { font-size: 10.5px; }
+            .food-meal-remove-btn { width: 18px; height: 18px; font-size: 13px; }
+            .food-meal-restore-btn { margin-top: 5px; padding: 6px; font-size: 10.5px; }
+            .item-checkbox { width: 16px; height: 16px; }
+            .item-card { gap: 7px; }
+            .item-name { font-size: 11.5px; }
+            .item-del-btn { font-size: 14px; padding: 2px; }
+            .add-row { margin-top: 3px; gap: 5px; }
+            .add-input { padding: 6px 8px; font-size: 16px; border-radius: 7px; }
+            .add-btn { padding: 0 9px; font-size: 11.5px; border-radius: 7px; }
 
-            .record-title-row strong { font-size: 13.5px; }
-            .record-dates { font-size: 11px; }
-            .record-note { font-size: 11.5px; margin-top: 3px; }
-            .record-link { font-size: 11px; }
-            .record-form { gap: 5px; }
+            .record-title-row strong { font-size: 12.5px; }
+            .record-dates { font-size: 10px; }
+            .record-note { font-size: 10.5px; margin-top: 2px; }
+            .record-link { font-size: 10px; }
+            .record-form { gap: 4px; }
 
-            .food-saved-banner { padding: 7px 10px; margin-bottom: 8px; }
-            .food-saved-banner span { font-size: 12px; }
-            .trip-food-summary { margin-top: 3px; }
-            .trip-food-summary-title { font-size: 10.5px; }
-            .trip-food-summary-line { font-size: 11px; line-height: 1.35; }
-            .trip-weather-row { gap: 2px; margin-top: 3px; }
-            .trip-weather-line { font-size: 11px; }
+            .food-saved-banner { padding: 6px 8px; margin-bottom: 6px; border-radius: 8px; }
+            .food-saved-banner span { font-size: 11px; }
+            .food-saved-edit-btn { padding: 6px 10px; font-size: 11px; }
+            .trip-food-summary { margin-top: 2px; }
+            .trip-food-summary-title { font-size: 10px; }
+            .trip-food-summary-line { font-size: 10px; line-height: 1.3; }
+            .trip-weather-row { gap: 1px; margin-top: 2px; }
+            .trip-weather-line { font-size: 10px; }
 
-            .restaurant-card { padding: 8px 10px; margin-bottom: 6px; }
-            .restaurant-name { font-size: 12.5px; }
-            .restaurant-meta { font-size: 11px; }
+            .restaurant-card { padding: 6px 8px; margin-bottom: 5px; }
+            .restaurant-name { font-size: 11.5px; }
+            .restaurant-meta { font-size: 10px; }
+            .restaurant-link { font-size: 10px; }
+
+            .autocomplete-list li { padding: 6px 8px; }
+            .suggest-name { font-size: 12px; }
+            .suggest-addr { font-size: 10.5px; }
+
+            .gear-category-tag { font-size: 10px; padding: 1px 6px; }
+            .gear-manufacturer { font-size: 10.5px; }
+            .gear-name { font-size: 12.5px; }
+            .gear-price { font-size: 11px; }
         }
         .view-header {
             position: sticky; top: 0; background: rgba(255,255,255,0.7);
