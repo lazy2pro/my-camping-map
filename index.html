@@ -1726,8 +1726,9 @@ function loadFoodData() {
         return { trips: {} };
     }
 }
-function saveFoodData(data) {
+function saveFoodData(data, skipSync) {
     try { localStorage.setItem(FOOD_STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+    if (!skipSync) debouncedSync();
 }
 let foodData = loadFoodData();
 
@@ -1967,8 +1968,9 @@ function loadFoodPresets() {
         return [];
     }
 }
-function saveFoodPresets(data) {
+function saveFoodPresets(data, skipSync) {
     try { localStorage.setItem(FOOD_PRESETS_KEY, JSON.stringify(data)); } catch (e) {}
+    if (!skipSync) debouncedSync();
 }
 let foodPresets = loadFoodPresets();
 
@@ -2088,8 +2090,9 @@ function loadRecordsData() {
         return { upcoming: [], history: [] };
     }
 }
-function saveRecordsData(data) {
+function saveRecordsData(data, skipSync) {
     try { localStorage.setItem(RECORDS_STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+    if (!skipSync) debouncedSync();
 }
 let recordsData = loadRecordsData();
 
@@ -2440,8 +2443,9 @@ function loadGearData() {
         return { items: [], checklists: {} };
     }
 }
-function saveGearData(data) {
+function saveGearData(data, skipSync) {
     try { localStorage.setItem(GEAR_STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+    if (!skipSync) debouncedSync();
 }
 let gearData = loadGearData();
 let activeChecklistName = null;
@@ -2546,12 +2550,79 @@ function deleteCurrentChecklist() {
     renderGearView();
 }
 
+// ============================================================
+// ---- 여러 기기 동기화 (로그인 없이, 하나의 공유 데이터를 서버에 저장) ----
+// ============================================================
+// 로컬(localStorage)은 오프라인에서도 바로 쓰도록 캐시로 계속 사용하고,
+// 값이 바뀔 때마다 서버(api/sync)에도 저장해 다른 기기에서 같은 데이터를 볼 수 있게 한다.
+let syncTimer = null;
+
+function debouncedSync() {
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(pushStateToServer, 600);
+}
+
+async function pushStateToServer() {
+    const payload = {
+        food: foodData,
+        foodPresets: foodPresets,
+        records: recordsData,
+        gear: gearData,
+    };
+    try {
+        const res = await fetch('/api/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('sync failed');
+    } catch (err) {
+        console.warn('서버 동기화 저장에 실패했어요 (이 기기에는 저장되어 있어요):', err);
+    }
+}
+
+// 페이지를 열 때 서버에 저장된 최신 데이터를 가져와, 다른 기기에서 만든 변경사항을 반영한다.
+async function initialSync() {
+    try {
+        const res = await fetch('/api/sync');
+        if (!res.ok) throw new Error('fetch failed');
+        const data = await res.json();
+        const state = data && data.state;
+        if (state) {
+            if (state.food) foodData = state.food;
+            if (state.foodPresets) foodPresets = state.foodPresets;
+            if (state.records) recordsData = state.records;
+            if (state.gear) gearData = state.gear;
+            // 서버에서 받아온 값을 로컬 캐시에도 반영 (skipSync=true로 다시 서버에 쏘지 않음)
+            saveFoodData(foodData, true);
+            saveFoodPresets(foodPresets, true);
+            saveRecordsData(recordsData, true);
+            saveGearData(gearData, true);
+        }
+    } catch (err) {
+        console.warn('서버 동기화 불러오기에 실패했어요. 이 기기에 저장된 데이터로 계속 진행해요:', err);
+    }
+    refreshActiveView();
+}
+
+// 동기화로 데이터가 바뀌었을 수 있으니, 현재 열려있는 패널이 있으면 다시 그려서 반영한다.
+function refreshActiveView() {
+    const active = ['food', 'records', 'gear'].find((v) => {
+        const panel = document.getElementById(`view-${v}`);
+        return panel && panel.classList.contains('active');
+    });
+    if (active === 'food') renderFoodView();
+    else if (active === 'records') renderRecordsView();
+    else if (active === 'gear') renderGearView();
+}
+
 window.onload = function() {
     if (typeof naver !== 'undefined' && naver.maps) {
         initMap();
     } else {
         alert('네이버지도 SDK를 로드하지 못했습니다. ncpKeyId(Client ID)와 등록된 도메인을 확인하세요.');
     }
+    initialSync();
 };
 </script>
 </body>
