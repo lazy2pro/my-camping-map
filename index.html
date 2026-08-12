@@ -1299,12 +1299,25 @@ function openSheet(item) {
         noTarget: true, // 커스텀 스킴 링크라 target=_blank를 붙이면 오히려 안 열리는 브라우저가 있다
     });
 
+    // 검색/선택한 캠핑장을 캠핑 기록(예정 일정)에 바로 추가할 수 있는 버튼.
+    // 실제 저장은 날짜를 입력해야 하므로, 여기서는 캠핑기록 패널을 열고
+    // 이름/주소를 미리 채워준 뒤 사용자가 날짜만 골라 저장하게 한다.
+    buttons.push({
+        label: '📅 이 캠핑장 일정 추가',
+        cls: 'secondary',
+        role: 'add-schedule',
+        onClick: () => openScheduleFormForCamp(item),
+    });
+
     btnRow.innerHTML = '';
     btnRow.style.flexDirection = 'column';
     buttons.forEach((b) => {
         const a = document.createElement('a');
         if (b.pending) {
             a.dataset.pending = '1';
+        } else if (b.onClick) {
+            a.href = '#';
+            a.addEventListener('click', (e) => { e.preventDefault(); b.onClick(); });
         } else {
             a.href = b.href;
             if (!b.noTarget) {
@@ -1654,6 +1667,17 @@ function renderRecordsView() {
         card.querySelector('.item-del-btn').onclick = () => deleteRecord('history', rec.id);
         historyList.appendChild(card);
     });
+}
+
+// 지도의 캠핑장 시트에서 '일정 추가' 버튼을 눌렀을 때: 캠핑기록 패널을 열고
+// 예정 일정 탭의 입력폼에 캠핑장 이름/주소를 미리 채워준다. 날짜는 사용자가 직접 골라 저장한다.
+function openScheduleFormForCamp(item) {
+    closeSheet();
+    activeRecordsTab = 'upcoming';
+    switchView('records');
+    document.getElementById('upcoming-title-input').value = item.name;
+    document.getElementById('upcoming-note-input').value = item.address || '';
+    document.getElementById('upcoming-start-input').focus();
 }
 
 function addUpcomingRecord() {
