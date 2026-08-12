@@ -236,6 +236,48 @@
         .restaurant-name { font-weight: bold; font-size: 14px; color: #111; }
         .restaurant-meta { font-size: 12px; color: #666; margin-top: 2px; }
         .restaurant-link { font-size: 12px; color: #2b8a3e; font-weight: 600; }
+
+        /* ---- 캠핑 음식: 일자별 카드 ---- */
+        .food-day-card {
+            background: white; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+        .food-day-card.excluded { opacity: 0.55; }
+        .food-day-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13.5px; font-weight: 700; color: #333; }
+        .food-day-toggle input { width: 18px; height: 18px; accent-color: #2b8a3e; flex-shrink: 0; }
+        .food-day-body { margin-top: 10px; padding-top: 10px; border-top: 1px solid #f1f3f5; }
+        .food-day-body .item-card { padding: 8px 10px; margin-bottom: 6px; }
+        .food-day-body .add-row { margin-top: 6px; }
+
+        /* ---- 공휴일 연동 커스텀 날짜 선택기 ---- */
+        .date-input { cursor: pointer; background: #fff; }
+        .datepicker-popup {
+            position: absolute; z-index: 400; background: white; border-radius: 14px;
+            box-shadow: 0 8px 28px rgba(0,0,0,0.28); padding: 12px; width: 280px;
+            display: none;
+        }
+        .datepicker-popup.active { display: block; }
+        .datepicker-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .datepicker-nav-btn { background: none; border: none; font-size: 16px; color: #495057; cursor: pointer; padding: 4px 10px; }
+        .datepicker-title { font-size: 14px; font-weight: 700; color: #111; }
+        .datepicker-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 11px; color: #868e96; margin-bottom: 4px; }
+        .datepicker-weekdays span:first-child { color: #e03131; }
+        .datepicker-weekdays span:last-child { color: #1c7ed6; }
+        .datepicker-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+        .datepicker-day {
+            aspect-ratio: 1; border: none; background: none; border-radius: 8px; font-size: 12.5px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; color: #333; position: relative;
+        }
+        .datepicker-day:hover { background: #f1f3f5; }
+        .datepicker-day.other-month { color: #dee2e6; cursor: default; }
+        .datepicker-day.sunday { color: #e03131; }
+        .datepicker-day.saturday { color: #1c7ed6; }
+        .datepicker-day.holiday { color: #e03131; font-weight: 700; }
+        .datepicker-day.today { box-shadow: inset 0 0 0 1.5px #2b8a3e; }
+        .datepicker-day.selected { background: #2b8a3e; color: white !important; }
+        .datepicker-day .holiday-dot { position: absolute; bottom: 3px; width: 3px; height: 3px; border-radius: 50%; background: #e03131; }
+        .datepicker-day.selected .holiday-dot { background: white; }
+        .datepicker-footer { font-size: 11px; color: #adb5bd; text-align: center; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -311,20 +353,26 @@
 
         <div id="food-trip-body">
             <div class="tab-row" id="food-tab-row"></div>
-            <div id="food-item-list"></div>
-            <div class="add-row">
-                <input type="text" id="food-item-input" class="add-input" placeholder="메뉴/재료 추가" onkeyup="if(event.keyCode===13) submitFoodItem();">
-                <button class="add-btn" onclick="submitFoodItem()">추가</button>
-            </div>
+            <div id="food-days-list"></div>
+        </div>
 
-            <div style="margin-top:28px; border-top:1px solid #e9ecef; padding-top:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <h3 style="margin:0; font-size:15px; color:#111;">🍜 주변 맛집 추천</h3>
-                    <button class="add-btn" style="padding:8px 14px; font-size:13px;" onclick="findNearbyRestaurants()">추천받기</button>
-                </div>
-                <div id="restaurant-status" style="font-size:12px; color:#888; margin-bottom:8px;"></div>
-                <div id="restaurant-list"></div>
+        <div style="margin-top:28px; border-top:1px solid #e9ecef; padding-top:20px;">
+            <h3 style="margin:0 0 10px; font-size:15px; color:#111;">⭐ 즐겨찾는 메뉴/밀키트</h3>
+            <select id="food-preset-target-day" class="add-input" style="margin-bottom:10px;"></select>
+            <div id="food-preset-list"></div>
+            <div class="add-row">
+                <input type="text" id="food-preset-input" class="add-input" placeholder="자주 먹는 메뉴/밀키트 저장 (예: 짜파구리 밀키트)" onkeyup="if(event.keyCode===13) addFoodPreset();">
+                <button class="add-btn" onclick="addFoodPreset()">저장</button>
             </div>
+        </div>
+
+        <div id="food-restaurant-section" style="margin-top:28px; border-top:1px solid #e9ecef; padding-top:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h3 style="margin:0; font-size:15px; color:#111;">🍜 주변 맛집 추천</h3>
+                <button class="add-btn" style="padding:8px 14px; font-size:13px;" onclick="findNearbyRestaurants()">추천받기</button>
+            </div>
+            <div id="restaurant-status" style="font-size:12px; color:#888; margin-bottom:8px;"></div>
+            <div id="restaurant-list"></div>
         </div>
     </div>
 </div>
@@ -349,8 +397,8 @@
                     <ul class="autocomplete-list" id="upcoming-title-suggestions"></ul>
                 </div>
                 <div class="record-form-row">
-                    <input type="date" id="upcoming-start-input" class="add-input">
-                    <input type="date" id="upcoming-end-input" class="add-input">
+                    <input type="text" id="upcoming-start-input" class="add-input date-input" placeholder="시작일" readonly onclick="openDatePicker(this)">
+                    <input type="text" id="upcoming-end-input" class="add-input date-input" placeholder="종료일" readonly onclick="openDatePicker(this)">
                 </div>
                 <input type="url" id="upcoming-site-input" class="add-input" placeholder="사이트/예약 링크 (선택)">
                 <textarea id="upcoming-note-input" class="add-input" placeholder="메모 (선택)" style="resize:vertical; min-height:50px;"></textarea>
@@ -366,8 +414,8 @@
                     <ul class="autocomplete-list" id="history-camp-suggestions"></ul>
                 </div>
                 <div class="record-form-row">
-                    <input type="date" id="history-start-input" class="add-input">
-                    <input type="date" id="history-end-input" class="add-input">
+                    <input type="text" id="history-start-input" class="add-input date-input" placeholder="시작일" readonly onclick="openDatePicker(this)">
+                    <input type="text" id="history-end-input" class="add-input date-input" placeholder="종료일" readonly onclick="openDatePicker(this)">
                 </div>
                 <textarea id="history-note-input" class="add-input" placeholder="후기/메모" style="resize:vertical; min-height:50px;"></textarea>
                 <button class="add-btn" onclick="addHistoryRecord()">기록 추가</button>
@@ -1452,6 +1500,165 @@ function closeSheet() {
 }
 
 // ============================================================
+// ---- 공휴일 연동 커스텀 날짜 선택기 ----
+// ============================================================
+const holidayCache = {}; // { year: { 'YYYY-MM-DD': '휴일명' } }
+let datepickerTargetInput = null;
+let datepickerViewYear = new Date().getFullYear();
+let datepickerViewMonth = new Date().getMonth(); // 0-11
+let datepickerPopupEl = null;
+
+function formatDateISO(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function ensureDatepickerPopup() {
+    if (datepickerPopupEl) return datepickerPopupEl;
+    const el = document.createElement('div');
+    el.className = 'datepicker-popup';
+    el.id = 'datepicker-popup';
+    el.innerHTML = `
+        <div class="datepicker-header">
+            <button type="button" class="datepicker-nav-btn" onclick="shiftDatepickerMonth(-1)">‹</button>
+            <span class="datepicker-title" id="datepicker-title"></span>
+            <button type="button" class="datepicker-nav-btn" onclick="shiftDatepickerMonth(1)">›</button>
+        </div>
+        <div class="datepicker-weekdays">
+            <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+        </div>
+        <div class="datepicker-days" id="datepicker-days"></div>
+        <div class="datepicker-footer">공휴일은 빨간색으로 표시돼요</div>
+    `;
+    document.body.appendChild(el);
+    datepickerPopupEl = el;
+    return el;
+}
+
+// 네이버 지도 같은 공휴일 표기를 위해, 연도별 대한민국 공휴일 정보를 서버(api/holidays)를 통해 가져와 캐시한다.
+async function fetchHolidays(year) {
+    if (holidayCache[year]) return holidayCache[year];
+    try {
+        const res = await fetch(`/api/holidays?year=${year}`);
+        const data = await res.json();
+        const map = {};
+        (data.holidays || []).forEach((h) => { map[h.date] = h.name; });
+        holidayCache[year] = map;
+        return map;
+    } catch (err) {
+        console.error('공휴일 정보를 불러오지 못했습니다:', err);
+        return {};
+    }
+}
+
+function openDatePicker(inputEl) {
+    datepickerTargetInput = inputEl;
+    const popup = ensureDatepickerPopup();
+
+    const existing = inputEl.value;
+    const baseDate = existing ? new Date(existing + 'T00:00:00') : new Date();
+    datepickerViewYear = baseDate.getFullYear();
+    datepickerViewMonth = baseDate.getMonth();
+
+    const rect = inputEl.getBoundingClientRect();
+    popup.style.top = `${rect.bottom + window.scrollY + 6}px`;
+    popup.style.left = `${Math.max(8, Math.min(rect.left + window.scrollX, window.innerWidth - 296))}px`;
+    popup.classList.add('active');
+
+    renderDatepicker();
+}
+
+function closeDatePicker() {
+    if (datepickerPopupEl) datepickerPopupEl.classList.remove('active');
+    datepickerTargetInput = null;
+}
+
+function shiftDatepickerMonth(delta) {
+    datepickerViewMonth += delta;
+    if (datepickerViewMonth < 0) { datepickerViewMonth = 11; datepickerViewYear--; }
+    if (datepickerViewMonth > 11) { datepickerViewMonth = 0; datepickerViewYear++; }
+    renderDatepicker();
+}
+
+async function renderDatepicker() {
+    const titleEl = document.getElementById('datepicker-title');
+    const daysEl = document.getElementById('datepicker-days');
+    const requestedLabel = `${datepickerViewYear}년 ${datepickerViewMonth + 1}월`;
+    titleEl.innerText = requestedLabel;
+
+    const holidays = await fetchHolidays(datepickerViewYear);
+    // 공휴일 로딩 중 사용자가 다른 달로 이동했다면, 이미 지나간 요청이므로 그리지 않는다.
+    if (titleEl.innerText !== requestedLabel) return;
+
+    const firstOfMonth = new Date(datepickerViewYear, datepickerViewMonth, 1);
+    const startWeekday = firstOfMonth.getDay(); // 0=일요일
+    const daysInMonth = new Date(datepickerViewYear, datepickerViewMonth + 1, 0).getDate();
+    const daysInPrevMonth = new Date(datepickerViewYear, datepickerViewMonth, 0).getDate();
+    const totalCells = Math.ceil((startWeekday + daysInMonth) / 7) * 7;
+
+    const cells = [];
+    for (let i = startWeekday - 1; i >= 0; i--) {
+        cells.push({ day: daysInPrevMonth - i, other: true, month: datepickerViewMonth - 1 });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+        cells.push({ day: d, other: false, month: datepickerViewMonth });
+    }
+    let nextDay = 1;
+    while (cells.length < totalCells) {
+        cells.push({ day: nextDay++, other: true, month: datepickerViewMonth + 1 });
+    }
+
+    const todayStr = formatDateISO(new Date());
+    const selectedStr = datepickerTargetInput ? datepickerTargetInput.value : '';
+
+    daysEl.innerHTML = '';
+    cells.forEach((cell, idx) => {
+        const weekday = idx % 7;
+        let cellYear = datepickerViewYear;
+        let cellMonth = cell.month;
+        if (cellMonth < 0) { cellMonth = 11; cellYear -= 1; }
+        else if (cellMonth > 11) { cellMonth = 0; cellYear += 1; }
+        const dateObj = new Date(cellYear, cellMonth, cell.day);
+        const dateStr = formatDateISO(dateObj);
+        const holidayName = !cell.other ? holidays[dateStr] : null;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'datepicker-day';
+        if (cell.other) btn.classList.add('other-month');
+        if (weekday === 0) btn.classList.add('sunday');
+        if (weekday === 6) btn.classList.add('saturday');
+        if (holidayName) { btn.classList.add('holiday'); btn.title = holidayName; }
+        if (!cell.other && dateStr === todayStr) btn.classList.add('today');
+        if (!cell.other && dateStr === selectedStr) btn.classList.add('selected');
+        if (cell.other) btn.disabled = true;
+
+        btn.innerHTML = `${cell.day}${holidayName ? '<span class="holiday-dot"></span>' : ''}`;
+        if (!cell.other) {
+            btn.onclick = () => selectDatepickerDate(dateStr);
+        }
+        daysEl.appendChild(btn);
+    });
+}
+
+function selectDatepickerDate(dateStr) {
+    if (datepickerTargetInput) {
+        datepickerTargetInput.value = dateStr;
+    }
+    closeDatePicker();
+}
+
+document.addEventListener('click', (e) => {
+    if (!datepickerPopupEl || !datepickerPopupEl.classList.contains('active')) return;
+    const isDateInput = e.target.classList && e.target.classList.contains('date-input');
+    if (!datepickerPopupEl.contains(e.target) && !isDateInput) {
+        closeDatePicker();
+    }
+});
+
+// ============================================================
 // ---- 좌측 사이드바 뷰 전환 ----
 // ============================================================
 // 새 패널(음식/기록/장비)은 등유 리스트와 같은 위치에 반투명하게 뜨므로,
@@ -1482,14 +1689,15 @@ function switchView(view) {
 }
 
 // ============================================================
-// ---- 캠핑 음식 (예정 일정에 연동) ----
+// ---- 캠핑 음식 (예정 일정 + 날짜별로 연동) ----
 // ============================================================
-const FOOD_STORAGE_KEY = 'campmap_food_v2';
+const FOOD_STORAGE_KEY = 'campmap_food_v3';
 const FOOD_MEALS = [
     { key: 'breakfast', label: '아침' },
     { key: 'lunch', label: '점심' },
     { key: 'dinner', label: '저녁' },
 ];
+const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 let activeMealTab = 'breakfast';
 let activeFoodTripId = null;
 
@@ -1509,9 +1717,43 @@ let foodData = loadFoodData();
 
 function ensureTripFoodBucket(tripId) {
     if (!foodData.trips[tripId]) {
-        foodData.trips[tripId] = { breakfast: [], lunch: [], dinner: [] };
+        foodData.trips[tripId] = { days: {} };
     }
     return foodData.trips[tripId];
+}
+
+// 입실일엔 점심부터(아침 제외), 퇴실일엔 아침까지만(점심·저녁 제외) 기본값으로 잡아준다.
+// 하루짜리 일정처럼 입실=퇴실인 경우엔 세 끼 모두 기본 포함.
+function defaultMealIncluded(mealKey, dateStr, trip) {
+    const isCheckIn = dateStr === trip.startDate;
+    const isCheckOut = !!trip.endDate && dateStr === trip.endDate;
+    if (mealKey === 'breakfast' && isCheckIn && !isCheckOut) return false;
+    if ((mealKey === 'lunch' || mealKey === 'dinner') && isCheckOut && !isCheckIn) return false;
+    return true;
+}
+
+function ensureDayMealEntry(tripId, dateStr, mealKey, defaultIncluded) {
+    const bucket = ensureTripFoodBucket(tripId);
+    if (!bucket.days[dateStr]) bucket.days[dateStr] = {};
+    if (!bucket.days[dateStr][mealKey]) {
+        bucket.days[dateStr][mealKey] = { included: defaultIncluded, items: [] };
+    }
+    return bucket.days[dateStr][mealKey];
+}
+
+// 시작일~종료일(포함) 사이의 모든 날짜를 'YYYY-MM-DD' 문자열 배열로 만든다.
+function generateDateRange(start, end) {
+    if (!start) return [];
+    const startD = new Date(start + 'T00:00:00');
+    const endD = end ? new Date(end + 'T00:00:00') : startD;
+    if (isNaN(startD) || isNaN(endD) || endD < startD) return [start];
+    const days = [];
+    const cur = new Date(startD);
+    while (cur <= endD) {
+        days.push(formatDateISO(cur));
+        cur.setDate(cur.getDate() + 1);
+    }
+    return days;
 }
 
 function tripDateLabel(trip) {
@@ -1521,9 +1763,12 @@ function tripDateLabel(trip) {
 
 // 음식 뷰를 열 때: 예정 일정 목록을 드롭다운으로 보여주고, 선택된 일정의 음식 계획을 보여준다.
 function renderFoodView() {
+    renderFoodPresets();
+
     const select = document.getElementById('food-trip-select');
     const noTripMsg = document.getElementById('food-no-trip-msg');
     const bodyEl = document.getElementById('food-trip-body');
+    const restaurantSection = document.getElementById('food-restaurant-section');
 
     const trips = [...recordsData.upcoming].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
 
@@ -1531,6 +1776,7 @@ function renderFoodView() {
         select.style.display = 'none';
         noTripMsg.style.display = 'block';
         bodyEl.style.display = 'none';
+        restaurantSection.style.display = 'none';
         activeFoodTripId = null;
         return;
     }
@@ -1538,6 +1784,7 @@ function renderFoodView() {
     noTripMsg.style.display = 'none';
     select.style.display = '';
     bodyEl.style.display = '';
+    restaurantSection.style.display = '';
 
     select.innerHTML = trips.map((t) => {
         const dateLabel = tripDateLabel(t);
@@ -1575,55 +1822,194 @@ function renderFoodMealTabs() {
         btn.onclick = () => { activeMealTab = meal.key; renderFoodMealTabs(); };
         tabRow.appendChild(btn);
     });
+    renderFoodDaysList();
+}
 
-    const listEl = document.getElementById('food-item-list');
+// 선택된 일정의 입실~퇴실 기간을 날짜별 카드로 나열한다. 각 카드는 그 날짜에
+// 현재 탭(아침/점심/저녁)을 먹을지 말지 체크박스로 포함/제외하고, 포함된 날짜만
+// 메뉴 목록 + 추가 입력창을 보여준다.
+function renderFoodDaysList() {
+    const listEl = document.getElementById('food-days-list');
     listEl.innerHTML = '';
     if (!activeFoodTripId) return;
+    const trip = recordsData.upcoming.find((t) => t.id === activeFoodTripId);
+    if (!trip) return;
 
-    const bucket = ensureTripFoodBucket(activeFoodTripId);
-    const items = bucket[activeMealTab] || [];
-    if (items.length === 0) {
-        listEl.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:12px 0;">아직 등록된 메뉴/재료가 없어요.</div>';
+    const dates = generateDateRange(trip.startDate, trip.endDate);
+    if (dates.length === 0) {
+        listEl.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:12px 0;">이 일정에는 날짜가 없어요. 캠핑 기록에서 시작일을 먼저 입력해주세요.</div>';
+        updatePresetTargetDayOptions([]);
+        return;
     }
-    items.forEach((item) => {
+
+    const includedDates = [];
+
+    dates.forEach((dateStr) => {
+        const entry = ensureDayMealEntry(activeFoodTripId, dateStr, activeMealTab, defaultMealIncluded(activeMealTab, dateStr, trip));
+
+        const dow = WEEKDAY_LABELS[new Date(dateStr + 'T00:00:00').getDay()];
+        const tags = [];
+        if (dateStr === trip.startDate) tags.push('입실');
+        if (trip.endDate && dateStr === trip.endDate) tags.push('퇴실');
+        const tagLabel = tags.length ? ` · ${tags.join('/')}` : '';
+
+        const card = document.createElement('div');
+        card.className = 'food-day-card' + (entry.included ? '' : ' excluded');
+        card.innerHTML = `
+            <label class="food-day-toggle">
+                <input type="checkbox" ${entry.included ? 'checked' : ''}>
+                <span>${dateStr.slice(5).replace('-', '/')} (${dow})${tagLabel}</span>
+            </label>
+            <div class="food-day-body" style="${entry.included ? '' : 'display:none;'}">
+                <div class="food-day-items"></div>
+                <div class="add-row">
+                    <input type="text" class="add-input food-day-input" placeholder="메뉴/재료 추가">
+                    <button class="add-btn food-day-add-btn">추가</button>
+                </div>
+            </div>
+        `;
+
+        card.querySelector('input[type="checkbox"]').onchange = (e) => {
+            entry.included = e.target.checked;
+            saveFoodData(foodData);
+            renderFoodDaysList();
+        };
+
+        if (entry.included) {
+            includedDates.push(dateStr);
+
+            const itemsEl = card.querySelector('.food-day-items');
+            if (entry.items.length === 0) {
+                itemsEl.innerHTML = '<div style="color:#adb5bd; font-size:12.5px; padding:6px 0;">등록된 메뉴가 없어요.</div>';
+            }
+            entry.items.forEach((item) => {
+                const itemCard = document.createElement('div');
+                itemCard.className = 'item-card';
+                itemCard.innerHTML = `
+                    <input type="checkbox" class="item-checkbox" ${item.checked ? 'checked' : ''}>
+                    <span class="item-name ${item.checked ? 'checked' : ''}">${item.name}</span>
+                    <button class="item-del-btn">✕</button>
+                `;
+                itemCard.querySelector('.item-checkbox').onchange = () => toggleFoodItem(dateStr, item.id);
+                itemCard.querySelector('.item-del-btn').onclick = () => deleteFoodItem(dateStr, item.id);
+                itemsEl.appendChild(itemCard);
+            });
+
+            const dayInput = card.querySelector('.food-day-input');
+            const submit = () => { if (addFoodItemToMeal(dateStr, dayInput.value)) dayInput.value = ''; };
+            card.querySelector('.food-day-add-btn').onclick = submit;
+            dayInput.onkeyup = (e) => { if (e.keyCode === 13) submit(); };
+        }
+
+        listEl.appendChild(card);
+    });
+
+    updatePresetTargetDayOptions(includedDates);
+}
+
+// 현재 선택된 일정 · 현재 탭(아침/점심/저녁) · 특정 날짜에 메뉴를 추가하는 공통 로직.
+// 직접 입력한 값이든, 즐겨찾는 메뉴에서 불러온 값이든 여기로 모인다.
+function addFoodItemToMeal(dateStr, name) {
+    if (!activeFoodTripId || !dateStr) { alert('먼저 캠핑 일정과 날짜를 선택해주세요.'); return false; }
+    const trimmed = (name || '').trim();
+    if (!trimmed) return false;
+    const entry = ensureDayMealEntry(activeFoodTripId, dateStr, activeMealTab, true);
+    entry.items.push({ id: Date.now() + Math.random().toString(16).slice(2), name: trimmed, checked: false });
+    saveFoodData(foodData);
+    renderFoodDaysList();
+    return true;
+}
+
+function toggleFoodItem(dateStr, id) {
+    if (!activeFoodTripId) return;
+    const entry = ensureDayMealEntry(activeFoodTripId, dateStr, activeMealTab, true);
+    const item = entry.items.find((i) => i.id === id);
+    if (item) item.checked = !item.checked;
+    saveFoodData(foodData);
+    renderFoodDaysList();
+}
+function deleteFoodItem(dateStr, id) {
+    if (!activeFoodTripId) return;
+    const entry = ensureDayMealEntry(activeFoodTripId, dateStr, activeMealTab, true);
+    entry.items = entry.items.filter((i) => i.id !== id);
+    saveFoodData(foodData);
+    renderFoodDaysList();
+}
+
+// ---- 즐겨찾는 메뉴/밀키트 (일정과 무관하게 항상 저장되는 나만의 목록) ----
+const FOOD_PRESETS_KEY = 'campmap_food_presets_v1';
+
+function loadFoodPresets() {
+    try {
+        const raw = localStorage.getItem(FOOD_PRESETS_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        return [];
+    }
+}
+function saveFoodPresets(data) {
+    try { localStorage.setItem(FOOD_PRESETS_KEY, JSON.stringify(data)); } catch (e) {}
+}
+let foodPresets = loadFoodPresets();
+
+// 즐겨찾기를 어느 날짜(현재 탭 기준 포함된 날짜 중)에 추가할지 고르는 드롭다운을 채운다.
+function updatePresetTargetDayOptions(includedDates) {
+    const select = document.getElementById('food-preset-target-day');
+    if (!select) return;
+    if (!includedDates || includedDates.length === 0) {
+        select.innerHTML = '<option value="">추가할 날짜가 없어요</option>';
+        select.disabled = true;
+        return;
+    }
+    select.disabled = false;
+    const prevValue = select.value;
+    const mealLabel = (FOOD_MEALS.find((m) => m.key === activeMealTab) || {}).label || '';
+    select.innerHTML = includedDates.map((d) => {
+        const dow = WEEKDAY_LABELS[new Date(d + 'T00:00:00').getDay()];
+        return `<option value="${d}">${d.slice(5).replace('-', '/')} (${dow}) ${mealLabel}에 추가</option>`;
+    }).join('');
+    if (includedDates.includes(prevValue)) select.value = prevValue;
+}
+
+function renderFoodPresets() {
+    const listEl = document.getElementById('food-preset-list');
+    listEl.innerHTML = '';
+    if (foodPresets.length === 0) {
+        listEl.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:8px 0;">저장된 메뉴가 없어요. 자주 먹는 밀키트나 레시피를 등록해보세요.</div>';
+        return;
+    }
+    foodPresets.forEach((preset) => {
         const card = document.createElement('div');
         card.className = 'item-card';
         card.innerHTML = `
-            <input type="checkbox" class="item-checkbox" ${item.checked ? 'checked' : ''}>
-            <span class="item-name ${item.checked ? 'checked' : ''}">${item.name}</span>
+            <span class="item-name">${preset.name}</span>
+            <button class="add-btn" style="padding:6px 12px; font-size:12px;" title="위에서 고른 날짜/끼니에 추가">추가</button>
             <button class="item-del-btn">✕</button>
         `;
-        card.querySelector('.item-checkbox').onchange = () => toggleFoodItem(item.id);
-        card.querySelector('.item-del-btn').onclick = () => deleteFoodItem(item.id);
+        card.querySelector('.add-btn').onclick = () => {
+            const select = document.getElementById('food-preset-target-day');
+            const dateStr = select ? select.value : '';
+            if (!dateStr) { alert('먼저 추가할 날짜를 선택해주세요. (현재 탭에 포함된 날짜가 있어야 해요)'); return; }
+            addFoodItemToMeal(dateStr, preset.name);
+        };
+        card.querySelector('.item-del-btn').onclick = () => deleteFoodPreset(preset.id);
         listEl.appendChild(card);
     });
 }
 
-function submitFoodItem() {
-    if (!activeFoodTripId) return;
-    const input = document.getElementById('food-item-input');
+function addFoodPreset() {
+    const input = document.getElementById('food-preset-input');
     const name = input.value.trim();
     if (!name) return;
-    const bucket = ensureTripFoodBucket(activeFoodTripId);
-    bucket[activeMealTab].push({ id: Date.now() + Math.random().toString(16).slice(2), name, checked: false });
-    saveFoodData(foodData);
+    foodPresets.push({ id: Date.now() + Math.random().toString(16).slice(2), name });
+    saveFoodPresets(foodPresets);
     input.value = '';
-    renderFoodMealTabs();
+    renderFoodPresets();
 }
-function toggleFoodItem(id) {
-    if (!activeFoodTripId) return;
-    const bucket = ensureTripFoodBucket(activeFoodTripId);
-    const item = bucket[activeMealTab].find((i) => i.id === id);
-    if (item) item.checked = !item.checked;
-    saveFoodData(foodData);
-    renderFoodMealTabs();
-}
-function deleteFoodItem(id) {
-    if (!activeFoodTripId) return;
-    const bucket = ensureTripFoodBucket(activeFoodTripId);
-    bucket[activeMealTab] = bucket[activeMealTab].filter((i) => i.id !== id);
-    saveFoodData(foodData);
-    renderFoodMealTabs();
+function deleteFoodPreset(id) {
+    foodPresets = foodPresets.filter((p) => p.id !== id);
+    saveFoodPresets(foodPresets);
+    renderFoodPresets();
 }
 
 // ---- 주변 맛집 추천 (선택된 일정의 캠핑장 위치 기준) ----
@@ -1778,7 +2164,7 @@ function openScheduleFormForCamp(item) {
     document.getElementById('upcoming-site-input').value = pickSiteUrl(item) || '';
     pendingUpcomingLat = item.lat || null;
     pendingUpcomingLng = item.lng || null;
-    document.getElementById('upcoming-start-input').focus();
+    openDatePicker(document.getElementById('upcoming-start-input'));
 }
 
 // 고캠핑 등록 캠핑장은 resveUrl/homepage, 보완 검색(네이버) 캠핑장은 placeUrl을 사이트 링크로 우선 사용한다.
