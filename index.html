@@ -227,6 +227,11 @@
         .record-form { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
         .record-form-row { display: flex; gap: 8px; }
         .record-link { font-size: 12px; color: #1c7ed6; font-weight: 600; display: inline-block; margin-top: 2px; }
+        .trip-weather-row { display: none; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+        .trip-weather-chip {
+            font-size: 11px; background: #f1f3f5; color: #495057; padding: 3px 8px;
+            border-radius: 20px; font-weight: 600; white-space: nowrap;
+        }
 
         .autocomplete-wrap { position: relative; }
         .autocomplete-list {
@@ -350,6 +355,7 @@
     <span><span class="dot" style="background:#2b8a3e;"></span>고캠핑 등록 캠핑장</span>
     <span><span class="dot" style="background:#e8590c;"></span>고캠핑 미등록 (보완 검색)</span>
     <span><span class="dot" style="background:#1c7ed6;"></span>⛽ 실내등유 판매 주유소</span>
+    <span id="weather-legend-line" style="display:none; font-weight:600; padding-top:2px; border-top:1px solid #f1f3f5; margin-top:2px;"></span>
 </div>
 
 <div id="map"></div>
@@ -872,6 +878,7 @@ function initMap() {
         clearTimeout(fetchTimer);
         fetchTimer = setTimeout(() => {
             fetchCampsInView();
+            updateWeatherForMapCenter();
             if (fuelLayerActive) {
                 // 리스트 항목 클릭으로 지도를 이동시킨 직후에는, 이미 갖고 있는 데이터를
                 // 다시 불러와 강조 표시(선택 상태)가 리셋되는 걸 막기 위해 한 번만 건너뛴다.
@@ -886,6 +893,7 @@ function initMap() {
 
     moveToCurrentLocation();
     fetchCampsInView();
+    updateWeatherForMapCenter();
 }
 
 const ZOOM_RADIUS_M = { 6: 100000, 7: 60000, 8: 40000, 9: 25000, 10: 15000, 11: 10000, 12: 6000, 13: 4000, 14: 2000, 15: 1200, 16: 800, 17: 500 };
@@ -924,6 +932,73 @@ async function fetchCampsInView() {
         if (err.name === 'AbortError') return;
         console.error(err);
         showStatus(err.isApiError ? err.message : '네트워크 오류로 캠핑장을 불러오지 못했습니다.', true);
+    }
+}
+
+// ---- 지도 중심 기준 날씨(범례에 작게 표시) ----
+// WMO 날씨 코드(Open-Meteo 기준)를 간단한 이모지+설명으로 매핑.
+const WEATHER_CODE_MAP = {
+    0: '☀️ 맑음', 1: '🌤 대체로 맑음', 2: '⛅ 구름조금', 3: '☁️ 흐림',
+    45: '🌫 안개', 48: '🌫 안개',
+    51: '🌦 이슬비', 53: '🌦 이슬비', 55: '🌦 이슬비',
+    56: '🌧 언 이슬비', 57: '🌧 언 이슬비',
+    61: '🌧 약한 비', 63: '🌧 비', 65: '🌧 강한 비',
+    66: '🌧 언 비', 67: '🌧 언 비',
+    71: '🌨 약한 눈', 73: '🌨 눈', 75: '🌨 강한 눈', 77: '🌨 싸락눈',
+    80: '🌦 소나기', 81: '🌦 소나기', 82: '⛈ 강한 소나기',
+    85: '🌨 소낙눈', 86: '🌨 강한 소낙눈',
+    95: '⛈ 뇌우', 96: '⛈ 뇌우(우박)', 99: '⛈ 강한 뇌우(우박)',
+};
+
+const weatherCache = new Map();
+const WEATHER_CACHE_TTL_MS = 20 * 60 * 1000; // 날씨는 자주 안 바뀌므로 20분 캐시
+const WEATHER_CACHE_LIMIT = 50;
+
+function weatherCacheKey(lat, lng) {
+    // 대략 5km 격자로 반올림해 살짝만 이동해도 캐시를 재사용하게 한다.
+    const gridLat = Math.round(lat * 20) / 20;
+    const gridLng = Math.round(lng * 20) / 20;
+    return `${gridLat},${gridLng}`;
+}
+
+async function fetchWeatherAt(lat, lng) {
+    const key = weatherCacheKey(lat, lng);
+    const cached = weatherCache.get(key);
+    if (cached && (Date.now() - cached.ts) < WEATHER_CACHE_TTL_MS) {
+        return cached.data;
+    }
+    const res = await fetch(`/api/weather?lat=${lat}&lng=${lng}`);
+    const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.error || '날씨 정보를 불러오지 못했습니다.');
+    }
+    weatherCache.set(key, { data, ts: Date.now() });
+    if (weatherCache.size > WEATHER_CACHE_LIMIT) {
+        weatherCache.delete(weatherCache.keys().next().value);
+    }
+    return data;
+}
+
+function renderWeatherLegendLine(data) {
+    const el = document.getElementById('weather-legend-line');
+    if (!el) return;
+    if (!data || typeof data.temperature !== 'number') {
+        el.style.display = 'none';
+        return;
+    }
+    const desc = WEATHER_CODE_MAP[data.weatherCode] || '🌡';
+    el.innerText = `${desc} ${Math.round(data.temperature)}°C (지도 중심 기준)`;
+    el.style.display = 'block';
+}
+
+async function updateWeatherForMapCenter() {
+    if (!map) return;
+    const center = map.getCenter();
+    try {
+        const data = await fetchWeatherAt(center.lat(), center.lng());
+        renderWeatherLegendLine(data);
+    } catch (err) {
+        console.error('날씨 정보를 불러오지 못했습니다:', err);
     }
 }
 
@@ -2332,6 +2407,43 @@ function switchRecordsTab(tab) {
     document.getElementById('records-history-panel').style.display = tab === 'history' ? '' : 'none';
 }
 
+// ---- 예정 일정 카드에 표시할, 캠핑 기간 동안의 날짜별 날씨 예보 ----
+const tripForecastCache = new Map();
+const TRIP_FORECAST_TTL_MS = 30 * 60 * 1000; // 예보도 자주 안 바뀌므로 30분 캐시
+
+async function fetchTripForecast(lat, lng, start, end) {
+    const key = `${lat.toFixed(2)},${lng.toFixed(2)},${start},${end}`;
+    const cached = tripForecastCache.get(key);
+    if (cached && (Date.now() - cached.ts) < TRIP_FORECAST_TTL_MS) {
+        return cached.days;
+    }
+    const res = await fetch(`/api/weather-forecast?lat=${lat}&lng=${lng}&start=${start}&end=${end}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '날씨 예보를 불러오지 못했습니다.');
+    const days = data.days || [];
+    tripForecastCache.set(key, { days, ts: Date.now() });
+    return days;
+}
+
+// 위경도가 있는 예정 일정 카드에, 입실~퇴실 기간의 날짜별 날씨를 작은 칩으로 채워 넣는다.
+// 너무 먼 미래라 예보가 없는 경우엔 그냥 조용히 아무것도 표시하지 않는다.
+async function loadTripWeatherIntoCard(rec, rowEl) {
+    if (!rowEl || !rec.lat || !rec.lng || !rec.startDate) return;
+    try {
+        const days = await fetchTripForecast(rec.lat, rec.lng, rec.startDate, rec.endDate || rec.startDate);
+        if (!days.length) return;
+        rowEl.innerHTML = days.map((d) => {
+            const desc = WEATHER_CODE_MAP[d.weatherCode] || '🌡';
+            const emoji = desc.split(' ')[0];
+            const md = d.date.slice(5).replace('-', '/');
+            return `<span class="trip-weather-chip">${md} ${emoji} ${Math.round(d.tempMax)}°/${Math.round(d.tempMin)}°</span>`;
+        }).join('');
+        rowEl.style.display = 'flex';
+    } catch (err) {
+        console.error('일정 날씨 예보를 불러오지 못했습니다:', err);
+    }
+}
+
 function recordDateRangeLabel(rec) {
     if (!rec.startDate) return '';
     if (!rec.endDate || rec.endDate === rec.startDate) return `${rec.startDate} (당일)`;
@@ -2359,11 +2471,13 @@ function renderRecordsView() {
             </div>
             <div class="record-dates">${recordDateRangeLabel(rec)}</div>
             ${foodSaved ? `<div style="font-size:11.5px; color:#2b8a3e; font-weight:700; margin-top:4px;">🍳 음식 계획 저장됨</div>` : ''}
+            <div class="trip-weather-row"></div>
             ${rec.site ? `<a class="record-link" href="${rec.site}" target="_blank" rel="noopener">🔗 사이트 바로가기</a>` : ''}
             ${rec.note ? `<div class="record-note">${rec.note}</div>` : ''}
         `;
         card.querySelector('.item-del-btn').onclick = () => deleteRecord('upcoming', rec.id);
         upcomingList.appendChild(card);
+        loadTripWeatherIntoCard(rec, card.querySelector('.trip-weather-row'));
     });
 
     const historyList = document.getElementById('history-list');
