@@ -12,7 +12,7 @@
         #map { width:100%; height:100%; background: #e9ecef; }
 
         .search-wrapper {
-            position: fixed; top: 16px; left: 16px; right: 16px; z-index: 100;
+            position: fixed; top: 16px; left: 84px; right: 16px; z-index: 100;
             display: flex; flex-direction: column; gap: 8px;
         }
         .search-container {
@@ -56,7 +56,7 @@
         .result-category { color: #2b8a3e; font-weight: 600; }
 
         #legend {
-            position: fixed; left: 16px; bottom: 30px; z-index: 90;
+            position: fixed; left: 84px; bottom: 30px; z-index: 90;
             background: white; border-radius: 10px; padding: 8px 12px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-size: 11px; color: #333;
             display: flex; flex-direction: column; gap: 4px;
@@ -150,9 +150,99 @@
         .reserve-btn.primary { background: #2b8a3e; }
         .reserve-btn.secondary { background: #495057; height: 42px; font-size: 14px; }
         .reserve-btn.disabled { background: #dee2e6; color: #868e96; height: 42px; font-size: 14px; cursor: default; pointer-events: none; }
+
+        /* ---- 좌측 사이드 메뉴 ---- */
+        #sidebar {
+            position: fixed; top: 0; left: 0; bottom: 0; width: 64px; z-index: 300;
+            background: white; box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            display: flex; flex-direction: column; align-items: center;
+            padding-top: 14px; gap: 4px;
+        }
+        .sidebar-btn {
+            width: 52px; height: 56px; border: none; background: none; cursor: pointer;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 4px; border-radius: 12px; color: #868e96; font-size: 10.5px; font-weight: 600;
+        }
+        .sidebar-btn .sidebar-icon { font-size: 20px; line-height: 1; }
+        .sidebar-btn:active { opacity: 0.8; }
+        .sidebar-btn.active { background: #e7f5ff; color: #1c7ed6; }
+
+        /* ---- 지도 외 뷰(음식/기록/장비) 공통 ---- */
+        .app-view {
+            position: fixed; top: 0; left: 64px; right: 0; bottom: 0; z-index: 250;
+            background: #f8f9fa; overflow-y: auto; display: none;
+        }
+        .app-view.active { display: block; }
+        .view-header {
+            position: sticky; top: 0; background: white; padding: 18px 20px 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06); z-index: 2;
+        }
+        .view-header h2 { margin: 0; font-size: 18px; color: #111; }
+        .view-body { padding: 16px 20px 100px; max-width: 560px; }
+
+        .tab-row { display: flex; gap: 8px; margin-bottom: 16px; }
+        .tab-btn {
+            flex: 1; padding: 10px; border: none; border-radius: 10px; background: #f1f3f5;
+            color: #495057; font-weight: 600; font-size: 13px; cursor: pointer;
+        }
+        .tab-btn.active { background: #2b8a3e; color: white; }
+
+        .item-card {
+            background: white; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08); display: flex; align-items: center; gap: 10px;
+        }
+        .item-checkbox { width: 20px; height: 20px; flex-shrink: 0; accent-color: #2b8a3e; }
+        .item-name { flex: 1; font-size: 14px; color: #333; word-break: break-word; }
+        .item-name.checked { text-decoration: line-through; color: #adb5bd; }
+        .item-del-btn { background: none; border: none; color: #e03131; font-size: 18px; cursor: pointer; padding: 4px; flex-shrink: 0; }
+        .add-row { display: flex; gap: 8px; margin-top: 10px; }
+        .add-input {
+            flex: 1; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px 12px;
+            font-size: 14px; font-family: inherit; width: 100%;
+        }
+        .add-btn {
+            background: #2b8a3e; color: white; border: none; border-radius: 8px;
+            padding: 0 16px; font-weight: bold; cursor: pointer; flex-shrink: 0;
+        }
+        .add-btn:active { opacity: 0.85; }
+
+        .record-card {
+            background: white; border-radius: 12px; padding: 14px; margin-bottom: 12px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+        .record-title-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+        .record-title-row strong { font-size: 15px; color: #111; }
+        .record-dates { font-size: 12px; color: #1c7ed6; font-weight: 600; margin-top: 2px; }
+        .record-note { font-size: 13px; color: #555; margin-top: 6px; white-space: pre-wrap; line-height: 1.4; }
+        .record-photo { width: 100%; border-radius: 8px; margin-top: 8px; max-height: 180px; object-fit: cover; display: block; }
+        .record-form { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+        .record-form-row { display: flex; gap: 8px; }
+
+        .restaurant-card {
+            background: white; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .restaurant-name { font-weight: bold; font-size: 14px; color: #111; }
+        .restaurant-meta { font-size: 12px; color: #666; margin-top: 2px; }
+        .restaurant-link { font-size: 12px; color: #2b8a3e; font-weight: 600; }
     </style>
 </head>
 <body>
+
+<div id="sidebar">
+    <button class="sidebar-btn active" id="sidebar-btn-map" onclick="switchView('map')">
+        <span class="sidebar-icon">🗺️</span><span>지도</span>
+    </button>
+    <button class="sidebar-btn" id="sidebar-btn-food" onclick="switchView('food')">
+        <span class="sidebar-icon">🍳</span><span>음식</span>
+    </button>
+    <button class="sidebar-btn" id="sidebar-btn-records" onclick="switchView('records')">
+        <span class="sidebar-icon">📅</span><span>기록</span>
+    </button>
+    <button class="sidebar-btn" id="sidebar-btn-gear" onclick="switchView('gear')">
+        <span class="sidebar-icon">🎒</span><span>장비</span>
+    </button>
+</div>
 
 <div class="search-wrapper">
     <div class="search-container">
@@ -192,6 +282,90 @@
     <p id="camp-address" class="camp-address"></p>
     <p id="camp-tel" class="camp-tel"></p>
     <div class="btn-row" id="reserve-btn-row"></div>
+</div>
+
+<!-- ---- 캠핑 음식 ---- -->
+<div class="app-view" id="view-food">
+    <div class="view-header"><h2>🍳 캠핑 음식</h2></div>
+    <div class="view-body">
+        <div class="tab-row" id="food-tab-row"></div>
+        <div id="food-item-list"></div>
+        <div class="add-row">
+            <input type="text" id="food-item-input" class="add-input" placeholder="메뉴/재료 추가" onkeyup="if(event.keyCode===13) submitFoodItem();">
+            <button class="add-btn" onclick="submitFoodItem()">추가</button>
+        </div>
+
+        <div style="margin-top:28px; border-top:1px solid #e9ecef; padding-top:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h3 style="margin:0; font-size:15px; color:#111;">🍜 주변 맛집 추천</h3>
+                <button class="add-btn" style="padding:8px 14px; font-size:13px;" onclick="findNearbyRestaurants()">추천받기</button>
+            </div>
+            <div id="restaurant-status" style="font-size:12px; color:#888; margin-bottom:8px;"></div>
+            <div id="restaurant-list"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ---- 캠핑 기록 ---- -->
+<div class="app-view" id="view-records">
+    <div class="view-header"><h2>📅 캠핑 기록</h2></div>
+    <div class="view-body">
+        <div class="tab-row">
+            <button class="tab-btn active" id="records-tab-upcoming" onclick="switchRecordsTab('upcoming')">예정 일정</button>
+            <button class="tab-btn" id="records-tab-history" onclick="switchRecordsTab('history')">지난 기록</button>
+        </div>
+
+        <div id="records-upcoming-panel">
+            <div id="upcoming-list"></div>
+            <div class="item-card record-form" style="align-items:stretch;">
+                <input type="text" id="upcoming-title-input" class="add-input" placeholder="캠핑장/여행 이름">
+                <div class="record-form-row">
+                    <input type="date" id="upcoming-start-input" class="add-input">
+                    <input type="date" id="upcoming-end-input" class="add-input">
+                </div>
+                <textarea id="upcoming-note-input" class="add-input" placeholder="메모 (선택)" style="resize:vertical; min-height:50px;"></textarea>
+                <button class="add-btn" onclick="addUpcomingRecord()">일정 추가</button>
+            </div>
+        </div>
+
+        <div id="records-history-panel" style="display:none;">
+            <div id="history-list"></div>
+            <div class="item-card record-form" style="align-items:stretch;">
+                <input type="text" id="history-camp-input" class="add-input" placeholder="캠핑장 이름">
+                <input type="date" id="history-date-input" class="add-input">
+                <input type="text" id="history-photo-input" class="add-input" placeholder="사진 URL (선택)">
+                <textarea id="history-note-input" class="add-input" placeholder="후기/메모" style="resize:vertical; min-height:50px;"></textarea>
+                <button class="add-btn" onclick="addHistoryRecord()">기록 추가</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ---- 내 장비 ---- -->
+<div class="app-view" id="view-gear">
+    <div class="view-header"><h2>🎒 내 장비</h2></div>
+    <div class="view-body">
+        <h3 style="font-size:15px; margin:0 0 10px;">장비 목록</h3>
+        <div id="gear-master-list"></div>
+        <div class="add-row">
+            <input type="text" id="gear-item-input" class="add-input" placeholder="장비 이름 추가 (예: 텐트)" onkeyup="if(event.keyCode===13) addGearItem();">
+            <button class="add-btn" onclick="addGearItem()">추가</button>
+        </div>
+
+        <div style="margin-top:28px; border-top:1px solid #e9ecef; padding-top:20px;">
+            <h3 style="font-size:15px; margin:0 0 10px;">캠핑 준비 체크리스트</h3>
+            <div class="add-row">
+                <input type="text" id="checklist-name-input" class="add-input" placeholder="체크리스트 이름 (예: 8월 계곡캠핑)">
+                <button class="add-btn" onclick="createChecklist()">생성</button>
+            </div>
+            <select id="checklist-select" class="add-input" style="margin-top:10px;" onchange="renderChecklistDetail()">
+                <option value="">체크리스트 선택...</option>
+            </select>
+            <div id="checklist-progress" style="font-size:12px; color:#1c7ed6; font-weight:600; margin:10px 0 4px;"></div>
+            <div id="checklist-item-list"></div>
+            <button class="reserve-btn secondary" style="margin-top:10px;" onclick="deleteCurrentChecklist()">이 체크리스트 삭제</button>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -1224,6 +1398,398 @@ async function upgradeReservationButtons(name, btnRow, officialUrl, region) {
 function closeSheet() {
     document.getElementById('bottom-sheet').classList.remove('active');
     document.getElementById('gps-btn').classList.remove('shifted');
+}
+
+// ============================================================
+// ---- 좌측 사이드바 뷰 전환 ----
+// ============================================================
+const MAP_ONLY_ELEMENT_IDS = ['search-wrapper', 'legend', 'gps-btn', 'fuel-price-list'];
+
+function switchView(view) {
+    ['map', 'food', 'records', 'gear'].forEach((v) => {
+        const btn = document.getElementById(`sidebar-btn-${v}`);
+        if (btn) btn.classList.toggle('active', v === view);
+        const panel = document.getElementById(`view-${v}`);
+        if (panel) panel.classList.toggle('active', v === view);
+    });
+
+    MAP_ONLY_ELEMENT_IDS.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = view === 'map' ? '' : 'none';
+    });
+
+    if (view !== 'map') {
+        closeSheet();
+        hideResults();
+    }
+
+    if (view === 'food') renderFoodView();
+    if (view === 'records') renderRecordsView();
+    if (view === 'gear') renderGearView();
+}
+
+// ============================================================
+// ---- 캠핑 음식 ----
+// ============================================================
+const FOOD_STORAGE_KEY = 'campmap_food_v1';
+const FOOD_MEALS = [
+    { key: 'breakfast', label: '아침' },
+    { key: 'lunch', label: '점심' },
+    { key: 'dinner', label: '저녁' },
+];
+let activeMealTab = 'breakfast';
+
+function loadFoodData() {
+    try {
+        const raw = localStorage.getItem(FOOD_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        return { breakfast: parsed.breakfast || [], lunch: parsed.lunch || [], dinner: parsed.dinner || [] };
+    } catch (e) {
+        return { breakfast: [], lunch: [], dinner: [] };
+    }
+}
+function saveFoodData(data) {
+    try { localStorage.setItem(FOOD_STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+}
+let foodData = loadFoodData();
+
+function renderFoodView() {
+    const tabRow = document.getElementById('food-tab-row');
+    tabRow.innerHTML = '';
+    FOOD_MEALS.forEach((meal) => {
+        const btn = document.createElement('button');
+        btn.className = 'tab-btn' + (meal.key === activeMealTab ? ' active' : '');
+        btn.innerText = meal.label;
+        btn.onclick = () => { activeMealTab = meal.key; renderFoodView(); };
+        tabRow.appendChild(btn);
+    });
+
+    const listEl = document.getElementById('food-item-list');
+    listEl.innerHTML = '';
+    const items = foodData[activeMealTab] || [];
+    if (items.length === 0) {
+        listEl.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:12px 0;">아직 등록된 메뉴/재료가 없어요.</div>';
+    }
+    items.forEach((item) => {
+        const card = document.createElement('div');
+        card.className = 'item-card';
+        card.innerHTML = `
+            <input type="checkbox" class="item-checkbox" ${item.checked ? 'checked' : ''}>
+            <span class="item-name ${item.checked ? 'checked' : ''}">${item.name}</span>
+            <button class="item-del-btn">✕</button>
+        `;
+        card.querySelector('.item-checkbox').onchange = () => toggleFoodItem(item.id);
+        card.querySelector('.item-del-btn').onclick = () => deleteFoodItem(item.id);
+        listEl.appendChild(card);
+    });
+}
+
+function submitFoodItem() {
+    const input = document.getElementById('food-item-input');
+    const name = input.value.trim();
+    if (!name) return;
+    foodData[activeMealTab].push({ id: Date.now() + Math.random().toString(16).slice(2), name, checked: false });
+    saveFoodData(foodData);
+    input.value = '';
+    renderFoodView();
+}
+function toggleFoodItem(id) {
+    const item = foodData[activeMealTab].find((i) => i.id === id);
+    if (item) item.checked = !item.checked;
+    saveFoodData(foodData);
+    renderFoodView();
+}
+function deleteFoodItem(id) {
+    foodData[activeMealTab] = foodData[activeMealTab].filter((i) => i.id !== id);
+    saveFoodData(foodData);
+    renderFoodView();
+}
+
+// ---- 주변 맛집 추천 ----
+function findNearbyRestaurants() {
+    const statusEl = document.getElementById('restaurant-status');
+    const listEl = document.getElementById('restaurant-list');
+    statusEl.innerText = '내 위치 확인 중...';
+    listEl.innerHTML = '';
+
+    if (!navigator.geolocation) {
+        statusEl.innerText = '이 브라우저는 위치 정보를 지원하지 않아요.';
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+            const { latitude, longitude } = pos.coords;
+            statusEl.innerText = '주변 지역 확인 중...';
+            let region = '';
+            try {
+                region = await reverseGeocodeRegion(latitude, longitude);
+            } catch (e) {}
+            const keyword = region ? `${region} 맛집` : '맛집';
+            statusEl.innerText = `'${keyword}' 검색 중...`;
+            try {
+                const res = await fetch(`/api/nearby-restaurants?keyword=${encodeURIComponent(keyword)}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || '맛집 정보를 불러오지 못했습니다.');
+                renderRestaurantResults(data.items || []);
+                statusEl.innerText = (data.items && data.items.length)
+                    ? `'${region || keyword}' 주변 맛집 ${data.items.length}곳`
+                    : '주변 맛집 정보를 찾지 못했어요.';
+            } catch (err) {
+                console.error(err);
+                statusEl.innerText = err.message || '맛집 정보를 불러오지 못했습니다.';
+            }
+        },
+        () => { statusEl.innerText = '위치 정보를 가져올 수 없어요. 위치 권한을 확인해주세요.'; },
+        { timeout: 6000 }
+    );
+}
+
+function renderRestaurantResults(items) {
+    const listEl = document.getElementById('restaurant-list');
+    listEl.innerHTML = '';
+    items.forEach((it) => {
+        const card = document.createElement('div');
+        card.className = 'restaurant-card';
+        card.innerHTML = `
+            <div class="restaurant-name">${it.name}</div>
+            <div class="restaurant-meta">${[it.category, it.address].filter(Boolean).join(' · ')}</div>
+            <a class="restaurant-link" href="https://map.naver.com/p/search/${encodeURIComponent(it.name)}" target="_blank" rel="noopener">네이버지도에서 보기 →</a>
+        `;
+        listEl.appendChild(card);
+    });
+}
+
+// ============================================================
+// ---- 캠핑 기록 (예정 일정 + 지난 기록) ----
+// ============================================================
+const RECORDS_STORAGE_KEY = 'campmap_records_v1';
+let activeRecordsTab = 'upcoming';
+
+function loadRecordsData() {
+    try {
+        const raw = localStorage.getItem(RECORDS_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        return { upcoming: parsed.upcoming || [], history: parsed.history || [] };
+    } catch (e) {
+        return { upcoming: [], history: [] };
+    }
+}
+function saveRecordsData(data) {
+    try { localStorage.setItem(RECORDS_STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+}
+let recordsData = loadRecordsData();
+
+function switchRecordsTab(tab) {
+    activeRecordsTab = tab;
+    document.getElementById('records-tab-upcoming').classList.toggle('active', tab === 'upcoming');
+    document.getElementById('records-tab-history').classList.toggle('active', tab === 'history');
+    document.getElementById('records-upcoming-panel').style.display = tab === 'upcoming' ? '' : 'none';
+    document.getElementById('records-history-panel').style.display = tab === 'history' ? '' : 'none';
+}
+
+function renderRecordsView() {
+    switchRecordsTab(activeRecordsTab);
+
+    const upcomingList = document.getElementById('upcoming-list');
+    upcomingList.innerHTML = '';
+    const sortedUpcoming = [...recordsData.upcoming].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+    if (sortedUpcoming.length === 0) {
+        upcomingList.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:12px 0;">등록된 예정 일정이 없어요.</div>';
+    }
+    sortedUpcoming.forEach((rec) => {
+        const card = document.createElement('div');
+        card.className = 'record-card';
+        const dateLabel = (rec.endDate && rec.endDate !== rec.startDate) ? `${rec.startDate} ~ ${rec.endDate}` : (rec.startDate || '');
+        card.innerHTML = `
+            <div class="record-title-row">
+                <strong>${rec.title}</strong>
+                <button class="item-del-btn">✕</button>
+            </div>
+            <div class="record-dates">${dateLabel}</div>
+            ${rec.note ? `<div class="record-note">${rec.note}</div>` : ''}
+        `;
+        card.querySelector('.item-del-btn').onclick = () => deleteRecord('upcoming', rec.id);
+        upcomingList.appendChild(card);
+    });
+
+    const historyList = document.getElementById('history-list');
+    historyList.innerHTML = '';
+    const sortedHistory = [...recordsData.history].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    if (sortedHistory.length === 0) {
+        historyList.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:12px 0;">아직 기록된 캠핑이 없어요.</div>';
+    }
+    sortedHistory.forEach((rec) => {
+        const card = document.createElement('div');
+        card.className = 'record-card';
+        card.innerHTML = `
+            <div class="record-title-row">
+                <strong>${rec.campName}</strong>
+                <button class="item-del-btn">✕</button>
+            </div>
+            <div class="record-dates">${rec.date || ''}</div>
+            ${rec.note ? `<div class="record-note">${rec.note}</div>` : ''}
+            ${rec.photoUrl ? `<img class="record-photo" src="${rec.photoUrl}" onerror="this.style.display='none'">` : ''}
+        `;
+        card.querySelector('.item-del-btn').onclick = () => deleteRecord('history', rec.id);
+        historyList.appendChild(card);
+    });
+}
+
+function addUpcomingRecord() {
+    const title = document.getElementById('upcoming-title-input').value.trim();
+    const startDate = document.getElementById('upcoming-start-input').value;
+    const endDate = document.getElementById('upcoming-end-input').value;
+    const note = document.getElementById('upcoming-note-input').value.trim();
+    if (!title) { alert('캠핑장/여행 이름을 입력해주세요.'); return; }
+    recordsData.upcoming.push({ id: Date.now() + Math.random().toString(16).slice(2), title, startDate, endDate, note });
+    saveRecordsData(recordsData);
+    document.getElementById('upcoming-title-input').value = '';
+    document.getElementById('upcoming-start-input').value = '';
+    document.getElementById('upcoming-end-input').value = '';
+    document.getElementById('upcoming-note-input').value = '';
+    renderRecordsView();
+}
+
+function addHistoryRecord() {
+    const campName = document.getElementById('history-camp-input').value.trim();
+    const date = document.getElementById('history-date-input').value;
+    const photoUrl = document.getElementById('history-photo-input').value.trim();
+    const note = document.getElementById('history-note-input').value.trim();
+    if (!campName) { alert('캠핑장 이름을 입력해주세요.'); return; }
+    recordsData.history.push({ id: Date.now() + Math.random().toString(16).slice(2), campName, date, photoUrl, note });
+    saveRecordsData(recordsData);
+    document.getElementById('history-camp-input').value = '';
+    document.getElementById('history-date-input').value = '';
+    document.getElementById('history-photo-input').value = '';
+    document.getElementById('history-note-input').value = '';
+    renderRecordsView();
+}
+
+function deleteRecord(type, id) {
+    recordsData[type] = recordsData[type].filter((r) => r.id !== id);
+    saveRecordsData(recordsData);
+    renderRecordsView();
+}
+
+// ============================================================
+// ---- 내 장비 (목록 관리 + 캠핑별 체크리스트) ----
+// ============================================================
+const GEAR_STORAGE_KEY = 'campmap_gear_v1';
+
+function loadGearData() {
+    try {
+        const raw = localStorage.getItem(GEAR_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        return { items: parsed.items || [], checklists: parsed.checklists || {} };
+    } catch (e) {
+        return { items: [], checklists: {} };
+    }
+}
+function saveGearData(data) {
+    try { localStorage.setItem(GEAR_STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+}
+let gearData = loadGearData();
+let activeChecklistName = null;
+
+function renderGearView() {
+    const listEl = document.getElementById('gear-master-list');
+    listEl.innerHTML = '';
+    if (gearData.items.length === 0) {
+        listEl.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:12px 0;">등록된 장비가 없어요.</div>';
+    }
+    gearData.items.forEach((item) => {
+        const card = document.createElement('div');
+        card.className = 'item-card';
+        card.innerHTML = `
+            <span class="item-name">${item.name}</span>
+            <button class="item-del-btn">✕</button>
+        `;
+        card.querySelector('.item-del-btn').onclick = () => deleteGearItem(item.id);
+        listEl.appendChild(card);
+    });
+
+    const select = document.getElementById('checklist-select');
+    const names = Object.keys(gearData.checklists);
+    const prevSelected = activeChecklistName;
+    select.innerHTML = '<option value="">체크리스트 선택...</option>' +
+        names.map((n) => `<option value="${n}">${n}</option>`).join('');
+    activeChecklistName = (prevSelected && names.includes(prevSelected)) ? prevSelected : null;
+    select.value = activeChecklistName || '';
+    renderChecklistDetail();
+}
+
+function addGearItem() {
+    const input = document.getElementById('gear-item-input');
+    const name = input.value.trim();
+    if (!name) return;
+    gearData.items.push({ id: Date.now() + Math.random().toString(16).slice(2), name });
+    saveGearData(gearData);
+    input.value = '';
+    renderGearView();
+}
+function deleteGearItem(id) {
+    gearData.items = gearData.items.filter((i) => i.id !== id);
+    saveGearData(gearData);
+    renderGearView();
+}
+
+function createChecklist() {
+    const nameInput = document.getElementById('checklist-name-input');
+    const name = nameInput.value.trim();
+    if (!name) { alert('체크리스트 이름을 입력해주세요.'); return; }
+    if (gearData.items.length === 0) { alert('먼저 장비를 목록에 추가해주세요.'); return; }
+    const checklist = {};
+    gearData.items.forEach((item) => { checklist[item.id] = false; });
+    gearData.checklists[name] = checklist;
+    saveGearData(gearData);
+    nameInput.value = '';
+    activeChecklistName = name;
+    renderGearView();
+}
+
+function renderChecklistDetail() {
+    const select = document.getElementById('checklist-select');
+    activeChecklistName = select.value || null;
+    const progressEl = document.getElementById('checklist-progress');
+    const listEl = document.getElementById('checklist-item-list');
+    listEl.innerHTML = '';
+
+    if (!activeChecklistName || !gearData.checklists[activeChecklistName]) {
+        progressEl.innerText = '';
+        return;
+    }
+    const checklist = gearData.checklists[activeChecklistName];
+    const checkedCount = Object.values(checklist).filter(Boolean).length;
+    const totalCount = Object.keys(checklist).length;
+    progressEl.innerText = `${checkedCount} / ${totalCount} 준비완료`;
+
+    gearData.items
+        .filter((item) => checklist.hasOwnProperty(item.id))
+        .forEach((item) => {
+            const card = document.createElement('div');
+            card.className = 'item-card';
+            const checked = checklist[item.id];
+            card.innerHTML = `
+                <input type="checkbox" class="item-checkbox" ${checked ? 'checked' : ''}>
+                <span class="item-name ${checked ? 'checked' : ''}">${item.name}</span>
+            `;
+            card.querySelector('.item-checkbox').onchange = (e) => {
+                gearData.checklists[activeChecklistName][item.id] = e.target.checked;
+                saveGearData(gearData);
+                renderChecklistDetail();
+            };
+            listEl.appendChild(card);
+        });
+}
+
+function deleteCurrentChecklist() {
+    if (!activeChecklistName) return;
+    if (!confirm(`'${activeChecklistName}' 체크리스트를 삭제할까요?`)) return;
+    delete gearData.checklists[activeChecklistName];
+    saveGearData(gearData);
+    activeChecklistName = null;
+    renderGearView();
 }
 
 window.onload = function() {
