@@ -170,6 +170,16 @@
             overflow-y: auto; display: none;
         }
         .app-view.active { display: block; }
+        /* 좁은 화면(모바일)에서는 폭 고정 때문에 패널 왼쪽이 좌측 사이드바(64px) 밑에 가려지므로,
+           사이드바 오른쪽부터 시작하도록 좌우 폭을 새로 잡아준다. */
+        @media (max-width: 560px) {
+            .app-view {
+                left: 84px;
+                right: 12px;
+                width: auto;
+                max-width: none;
+            }
+        }
         .view-header {
             position: sticky; top: 0; background: rgba(255,255,255,0.7);
             backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
