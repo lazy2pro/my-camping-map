@@ -227,11 +227,11 @@
         .record-form { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
         .record-form-row { display: flex; gap: 8px; }
         .record-link { font-size: 12px; color: #1c7ed6; font-weight: 600; display: inline-block; margin-top: 2px; }
-        .trip-weather-row { display: none; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-        .trip-weather-chip {
-            font-size: 11px; background: #f1f3f5; color: #495057; padding: 3px 8px;
-            border-radius: 20px; font-weight: 600; white-space: nowrap;
-        }
+        .trip-weather-row { display: none; flex-direction: column; gap: 3px; margin-top: 6px; }
+        .trip-weather-line { font-size: 12px; color: #495057; font-weight: 600; }
+        .trip-food-summary { margin-top: 6px; }
+        .trip-food-summary-title { font-size: 11.5px; color: #2b8a3e; font-weight: 700; margin-bottom: 2px; }
+        .trip-food-summary-line { font-size: 12px; color: #555; line-height: 1.5; }
 
         .autocomplete-wrap { position: relative; }
         .autocomplete-list {
@@ -2343,9 +2343,9 @@ function checkoutDeadline(trip) {
     return isNaN(d) ? null : d;
 }
 
-function buildFoodSummaryForTrip(tripId) {
+function buildFoodSummaryLines(tripId) {
     const bucket = foodData.trips[tripId];
-    if (!bucket || !bucket.days) return '';
+    if (!bucket || !bucket.days) return [];
     const lines = [];
     Object.keys(bucket.days).sort().forEach((dateStr) => {
         const dayMeals = bucket.days[dateStr];
@@ -2358,6 +2358,11 @@ function buildFoodSummaryForTrip(tripId) {
             }
         });
     });
+    return lines;
+}
+
+function buildFoodSummaryForTrip(tripId) {
+    const lines = buildFoodSummaryLines(tripId);
     return lines.length ? `🍳 먹은 메뉴\n${lines.join('\n')}` : '';
 }
 
@@ -2434,9 +2439,8 @@ async function loadTripWeatherIntoCard(rec, rowEl) {
         if (!days.length) return;
         rowEl.innerHTML = days.map((d) => {
             const desc = WEATHER_CODE_MAP[d.weatherCode] || '🌡';
-            const emoji = desc.split(' ')[0];
             const md = d.date.slice(5).replace('-', '/');
-            return `<span class="trip-weather-chip">${md} ${emoji} ${Math.round(d.tempMax)}°/${Math.round(d.tempMin)}°</span>`;
+            return `<div class="trip-weather-line">${md} ${desc} ${Math.round(d.tempMax)}°/${Math.round(d.tempMin)}°</div>`;
         }).join('');
         rowEl.style.display = 'flex';
     } catch (err) {
@@ -2462,6 +2466,7 @@ function renderRecordsView() {
     }
     sortedUpcoming.forEach((rec) => {
         const foodSaved = !!(foodData.trips[rec.id] && foodData.trips[rec.id].saved);
+        const foodLines = foodSaved ? buildFoodSummaryLines(rec.id) : [];
         const card = document.createElement('div');
         card.className = 'record-card';
         card.innerHTML = `
@@ -2470,7 +2475,14 @@ function renderRecordsView() {
                 <button class="item-del-btn">✕</button>
             </div>
             <div class="record-dates">${recordDateRangeLabel(rec)}</div>
-            ${foodSaved ? `<div style="font-size:11.5px; color:#2b8a3e; font-weight:700; margin-top:4px;">🍳 음식 계획 저장됨</div>` : ''}
+            ${foodSaved ? `
+                <div class="trip-food-summary">
+                    <div class="trip-food-summary-title">🍳 음식 계획 저장됨</div>
+                    ${foodLines.length
+                        ? foodLines.map((l) => `<div class="trip-food-summary-line">${l}</div>`).join('')
+                        : '<div class="trip-food-summary-line">등록된 메뉴가 없어요.</div>'}
+                </div>
+            ` : ''}
             <div class="trip-weather-row"></div>
             ${rec.site ? `<a class="record-link" href="${rec.site}" target="_blank" rel="noopener">🔗 사이트 바로가기</a>` : ''}
             ${rec.note ? `<div class="record-note">${rec.note}</div>` : ''}
