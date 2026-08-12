@@ -179,6 +179,45 @@
                 width: auto;
                 max-width: none;
             }
+            /* 모바일에서는 카드/줄 간격과 폰트가 커서 스크롤이 과하게 길어지므로 전반적으로 좁혀준다. */
+            .view-header { padding: 10px 12px 8px; }
+            .view-header h2 { font-size: 15px; }
+            .view-body { padding: 4px 12px 16px; }
+            .tab-row { gap: 6px; margin-bottom: 10px; }
+            .tab-btn { padding: 7px; font-size: 12px; }
+
+            .food-day-card, .record-card, .item-card {
+                padding: 9px 11px; margin-bottom: 6px; border-radius: 10px;
+            }
+            .food-day-title { font-size: 12px; }
+            .food-meal-block { margin-top: 6px; padding-top: 6px; }
+            .food-meal-header { margin-bottom: 3px; }
+            .food-meal-header span { font-size: 11.5px; }
+            .food-meal-restore-btn { margin-top: 6px; padding: 7px; font-size: 11.5px; }
+            .item-checkbox { width: 17px; height: 17px; }
+            .item-name { font-size: 12.5px; }
+            .item-del-btn { font-size: 15px; }
+            .add-row { margin-top: 4px; gap: 6px; }
+            .add-input { padding: 7px 9px; font-size: 12.5px; }
+            .add-btn { padding: 0 10px; font-size: 12.5px; }
+
+            .record-title-row strong { font-size: 13.5px; }
+            .record-dates { font-size: 11px; }
+            .record-note { font-size: 11.5px; margin-top: 3px; }
+            .record-link { font-size: 11px; }
+            .record-form { gap: 5px; }
+
+            .food-saved-banner { padding: 7px 10px; margin-bottom: 8px; }
+            .food-saved-banner span { font-size: 12px; }
+            .trip-food-summary { margin-top: 3px; }
+            .trip-food-summary-title { font-size: 10.5px; }
+            .trip-food-summary-line { font-size: 11px; line-height: 1.35; }
+            .trip-weather-row { gap: 2px; margin-top: 3px; }
+            .trip-weather-line { font-size: 11px; }
+
+            .restaurant-card { padding: 8px 10px; margin-bottom: 6px; }
+            .restaurant-name { font-size: 12.5px; }
+            .restaurant-meta { font-size: 11px; }
         }
         .view-header {
             position: sticky; top: 0; background: rgba(255,255,255,0.7);
@@ -232,6 +271,12 @@
         .trip-food-summary { margin-top: 6px; }
         .trip-food-summary-title { font-size: 11.5px; color: #2b8a3e; font-weight: 700; margin-bottom: 2px; }
         .trip-food-summary-line { font-size: 12px; color: #555; line-height: 1.5; }
+        .food-saved-banner {
+            display: flex; justify-content: space-between; align-items: center;
+            background: #ebfbee; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;
+        }
+        .food-saved-banner span { font-size: 13px; color: #2b8a3e; font-weight: 700; }
+        .food-saved-edit-btn { padding: 8px 14px; font-size: 13px; }
 
         .autocomplete-wrap { position: relative; }
         .autocomplete-list {
@@ -2111,10 +2156,10 @@ function renderFoodReadOnly(trip, bucket) {
     listEl.innerHTML = '';
 
     const banner = document.createElement('div');
-    banner.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:#ebfbee; border-radius:10px; padding:10px 14px; margin-bottom:14px;';
+    banner.className = 'food-saved-banner';
     banner.innerHTML = `
-        <span style="font-size:13px; color:#2b8a3e; font-weight:700;">✅ 저장된 음식 계획</span>
-        <button type="button" class="add-btn" style="padding:8px 14px; font-size:13px;">✏️ 수정</button>
+        <span>✅ 저장된 음식 계획</span>
+        <button type="button" class="add-btn food-saved-edit-btn">✏️ 수정</button>
     `;
     banner.querySelector('button').onclick = () => {
         activeFoodEditing = true;
