@@ -271,6 +271,18 @@
         }
         .food-meal-restore-btn:active { background: #f1f3f5; }
 
+        /* ---- 내 장비: 종류/제조사/이름/금액 카드 ---- */
+        .gear-card { align-items: flex-start; }
+        .gear-card-info { flex: 1; min-width: 0; }
+        .gear-card-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .gear-category-tag {
+            font-size: 11px; font-weight: 700; color: #2b8a3e; background: #ebfbee;
+            padding: 2px 8px; border-radius: 20px; flex-shrink: 0;
+        }
+        .gear-manufacturer { font-size: 12px; color: #868e96; }
+        .gear-name { font-size: 14px; font-weight: 600; color: #222; margin-top: 3px; }
+        .gear-price { font-size: 12.5px; color: #1c7ed6; font-weight: 700; margin-top: 2px; }
+
         /* ---- 공휴일 연동 커스텀 날짜 선택기 ---- */
         .date-input { cursor: pointer; background: #fff; }
         .datepicker-popup {
@@ -457,11 +469,20 @@
     </div>
     <div class="view-body">
         <h3 style="font-size:15px; margin:0 0 10px;">장비 목록</h3>
-        <div id="gear-master-list"></div>
-        <div class="add-row">
-            <input type="text" id="gear-item-input" class="add-input" placeholder="장비 이름 추가 (예: 텐트)" onkeyup="if(event.keyCode===13) addGearItem();">
+
+        <div class="item-card" style="align-items:stretch; flex-direction:column; gap:8px;">
+            <div class="record-form-row">
+                <input type="text" id="gear-category-input" class="add-input" placeholder="종류 (예: 텐트)" list="gear-category-datalist" autocomplete="off">
+                <input type="text" id="gear-manufacturer-input" class="add-input" placeholder="제조사 (예: 콜맨)" list="gear-manufacturer-datalist" autocomplete="off">
+            </div>
+            <input type="text" id="gear-name-input" class="add-input" placeholder="이름 (예: 라이트닝 볼트 4)">
+            <input type="text" inputmode="numeric" id="gear-price-input" class="add-input" placeholder="금액 (원, 선택)">
             <button class="add-btn" onclick="addGearItem()">추가</button>
         </div>
+        <datalist id="gear-category-datalist"></datalist>
+        <datalist id="gear-manufacturer-datalist"></datalist>
+
+        <div id="gear-master-list" style="margin-top:14px;"></div>
 
         <div style="margin-top:28px; border-top:1px solid #e9ecef; padding-top:20px;">
             <h3 style="font-size:15px; margin:0 0 10px;">캠핑 준비 체크리스트</h3>
@@ -2468,14 +2489,30 @@ function renderGearView() {
     }
     gearData.items.forEach((item) => {
         const card = document.createElement('div');
-        card.className = 'item-card';
+        card.className = 'item-card gear-card';
+        const priceLabel = item.price ? `${Number(item.price).toLocaleString('ko-KR')}원` : '';
         card.innerHTML = `
-            <span class="item-name">${item.name}</span>
+            <div class="gear-card-info">
+                <div class="gear-card-top">
+                    ${item.category ? `<span class="gear-category-tag">${item.category}</span>` : ''}
+                    ${item.manufacturer ? `<span class="gear-manufacturer">${item.manufacturer}</span>` : ''}
+                </div>
+                <div class="gear-name">${item.name}</div>
+                ${priceLabel ? `<div class="gear-price">${priceLabel}</div>` : ''}
+            </div>
             <button class="item-del-btn">✕</button>
         `;
         card.querySelector('.item-del-btn').onclick = () => deleteGearItem(item.id);
         listEl.appendChild(card);
     });
+
+    // 종류/제조사 입력창의 자동완성(datalist)을, 지금까지 등록했던 값들로 채운다.
+    const categories = [...new Set(gearData.items.map((i) => i.category).filter(Boolean))];
+    const manufacturers = [...new Set(gearData.items.map((i) => i.manufacturer).filter(Boolean))];
+    const categoryList = document.getElementById('gear-category-datalist');
+    const manufacturerList = document.getElementById('gear-manufacturer-datalist');
+    if (categoryList) categoryList.innerHTML = categories.map((c) => `<option value="${c}"></option>`).join('');
+    if (manufacturerList) manufacturerList.innerHTML = manufacturers.map((m) => `<option value="${m}"></option>`).join('');
 
     const select = document.getElementById('checklist-select');
     const names = Object.keys(gearData.checklists);
@@ -2488,12 +2525,29 @@ function renderGearView() {
 }
 
 function addGearItem() {
-    const input = document.getElementById('gear-item-input');
-    const name = input.value.trim();
-    if (!name) return;
-    gearData.items.push({ id: Date.now() + Math.random().toString(16).slice(2), name });
+    const categoryInput = document.getElementById('gear-category-input');
+    const manufacturerInput = document.getElementById('gear-manufacturer-input');
+    const nameInput = document.getElementById('gear-name-input');
+    const priceInput = document.getElementById('gear-price-input');
+
+    const name = nameInput.value.trim();
+    if (!name) { alert('장비 이름을 입력해주세요.'); return; }
+
+    const category = categoryInput.value.trim();
+    const manufacturer = manufacturerInput.value.trim();
+    const priceDigits = priceInput.value.replace(/[^0-9]/g, '');
+    const price = priceDigits ? Number(priceDigits) : null;
+
+    gearData.items.push({
+        id: Date.now() + Math.random().toString(16).slice(2),
+        category, manufacturer, name, price,
+    });
     saveGearData(gearData);
-    input.value = '';
+
+    categoryInput.value = '';
+    manufacturerInput.value = '';
+    nameInput.value = '';
+    priceInput.value = '';
     renderGearView();
 }
 function deleteGearItem(id) {
