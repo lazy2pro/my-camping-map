@@ -226,6 +226,18 @@
         .record-photo { width: 100%; border-radius: 8px; margin-top: 8px; max-height: 180px; object-fit: cover; display: block; }
         .record-form { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
         .record-form-row { display: flex; gap: 8px; }
+        .record-link { font-size: 12px; color: #1c7ed6; font-weight: 600; display: inline-block; margin-top: 2px; }
+
+        .autocomplete-wrap { position: relative; }
+        .autocomplete-list {
+            position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20;
+            background: white; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+            max-height: 220px; overflow-y: auto; list-style: none; margin: 0; padding: 4px; display: none;
+        }
+        .autocomplete-list li { padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+        .autocomplete-list li:hover, .autocomplete-list li:active { background: #f1f3f5; }
+        .suggest-name { font-size: 13.5px; font-weight: 600; color: #111; }
+        .suggest-addr { font-size: 11.5px; color: #777; margin-top: 1px; }
 
         .restaurant-card {
             background: white; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
@@ -333,11 +345,15 @@
         <div id="records-upcoming-panel">
             <div id="upcoming-list"></div>
             <div class="item-card record-form" style="align-items:stretch;">
-                <input type="text" id="upcoming-title-input" class="add-input" placeholder="캠핑장/여행 이름">
+                <div class="autocomplete-wrap" id="upcoming-title-autocomplete">
+                    <input type="text" id="upcoming-title-input" class="add-input" placeholder="캠핑장/여행 이름 (입력하면 지도에서 검색돼요)" oninput="onUpcomingTitleInput()" autocomplete="off">
+                    <ul class="autocomplete-list" id="upcoming-title-suggestions"></ul>
+                </div>
                 <div class="record-form-row">
                     <input type="date" id="upcoming-start-input" class="add-input">
                     <input type="date" id="upcoming-end-input" class="add-input">
                 </div>
+                <input type="url" id="upcoming-site-input" class="add-input" placeholder="사이트/예약 링크 (선택)">
                 <textarea id="upcoming-note-input" class="add-input" placeholder="메모 (선택)" style="resize:vertical; min-height:50px;"></textarea>
                 <button class="add-btn" onclick="addUpcomingRecord()">일정 추가</button>
             </div>
@@ -1640,6 +1656,7 @@ function renderRecordsView() {
                 <button class="item-del-btn">✕</button>
             </div>
             <div class="record-dates">${dateLabel}</div>
+            ${rec.site ? `<a class="record-link" href="${rec.site}" target="_blank" rel="noopener">🔗 사이트 바로가기</a>` : ''}
             ${rec.note ? `<div class="record-note">${rec.note}</div>` : ''}
         `;
         card.querySelector('.item-del-btn').onclick = () => deleteRecord('upcoming', rec.id);
@@ -1670,28 +1687,103 @@ function renderRecordsView() {
 }
 
 // 지도의 캠핑장 시트에서 '일정 추가' 버튼을 눌렀을 때: 캠핑기록 패널을 열고
-// 예정 일정 탭의 입력폼에 캠핑장 이름/주소를 미리 채워준다. 날짜는 사용자가 직접 골라 저장한다.
+// 예정 일정 탭의 입력폼에 캠핑장 이름/주소/사이트 링크를 미리 채워준다. 날짜는 사용자가 직접 골라 저장한다.
 function openScheduleFormForCamp(item) {
     closeSheet();
     activeRecordsTab = 'upcoming';
     switchView('records');
+    hideUpcomingSuggestions();
     document.getElementById('upcoming-title-input').value = item.name;
     document.getElementById('upcoming-note-input').value = item.address || '';
+    document.getElementById('upcoming-site-input').value = pickSiteUrl(item) || '';
     document.getElementById('upcoming-start-input').focus();
 }
+
+// 고캠핑 등록 캠핑장은 resveUrl/homepage, 보완 검색(네이버) 캠핑장은 placeUrl을 사이트 링크로 우선 사용한다.
+function pickSiteUrl(item) {
+    if (isReservationWorthyUrl(item.resveUrl)) return item.resveUrl;
+    if (isReservationWorthyUrl(item.homepage)) return item.homepage;
+    if (item.placeUrl) return item.placeUrl;
+    return '';
+}
+
+// ---- 일정 이름 입력 시 지도(고캠핑+네이버 보완검색)에서 캠핑장 자동완성 ----
+let upcomingSuggestTimer = null;
+
+function onUpcomingTitleInput() {
+    clearTimeout(upcomingSuggestTimer);
+    const keyword = document.getElementById('upcoming-title-input').value.trim();
+    if (keyword.length < 2) {
+        hideUpcomingSuggestions();
+        return;
+    }
+    upcomingSuggestTimer = setTimeout(async () => {
+        try {
+            const results = await searchCampsByName(keyword);
+            renderUpcomingSuggestions(results.slice(0, 8));
+        } catch (err) {
+            console.error('일정 이름 자동완성 검색 실패:', err);
+        }
+    }, 350);
+}
+
+function renderUpcomingSuggestions(results) {
+    const listEl = document.getElementById('upcoming-title-suggestions');
+    listEl.innerHTML = '';
+    if (!results.length) {
+        listEl.style.display = 'none';
+        return;
+    }
+    results.forEach((camp) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <div class="suggest-name">${camp.name}</div>
+            <div class="suggest-addr">${camp.address}</div>
+        `;
+        // blur보다 먼저 발생하도록 mousedown에서 선택 처리(클릭 직전 목록이 닫히는 것 방지)
+        li.onmousedown = (e) => {
+            e.preventDefault();
+            selectUpcomingSuggestion(camp);
+        };
+        listEl.appendChild(li);
+    });
+    listEl.style.display = 'block';
+}
+
+function selectUpcomingSuggestion(camp) {
+    document.getElementById('upcoming-title-input').value = camp.name;
+    document.getElementById('upcoming-note-input').value = camp.address || '';
+    document.getElementById('upcoming-site-input').value = pickSiteUrl(camp) || '';
+    hideUpcomingSuggestions();
+}
+
+function hideUpcomingSuggestions() {
+    const listEl = document.getElementById('upcoming-title-suggestions');
+    if (!listEl) return;
+    listEl.style.display = 'none';
+    listEl.innerHTML = '';
+}
+
+document.addEventListener('click', (e) => {
+    const wrap = document.getElementById('upcoming-title-autocomplete');
+    if (wrap && !wrap.contains(e.target)) hideUpcomingSuggestions();
+});
 
 function addUpcomingRecord() {
     const title = document.getElementById('upcoming-title-input').value.trim();
     const startDate = document.getElementById('upcoming-start-input').value;
     const endDate = document.getElementById('upcoming-end-input').value;
+    const site = document.getElementById('upcoming-site-input').value.trim();
     const note = document.getElementById('upcoming-note-input').value.trim();
     if (!title) { alert('캠핑장/여행 이름을 입력해주세요.'); return; }
-    recordsData.upcoming.push({ id: Date.now() + Math.random().toString(16).slice(2), title, startDate, endDate, note });
+    recordsData.upcoming.push({ id: Date.now() + Math.random().toString(16).slice(2), title, startDate, endDate, site, note });
     saveRecordsData(recordsData);
     document.getElementById('upcoming-title-input').value = '';
     document.getElementById('upcoming-start-input').value = '';
     document.getElementById('upcoming-end-input').value = '';
+    document.getElementById('upcoming-site-input').value = '';
     document.getElementById('upcoming-note-input').value = '';
+    hideUpcomingSuggestions();
     renderRecordsView();
 }
 
