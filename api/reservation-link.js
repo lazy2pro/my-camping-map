@@ -55,7 +55,12 @@ export default async function handler(req, res) {
     // 네이버 검색 API 호출 횟수(쿼터)를 절반 가까이 줄인다.
     const primaryQueries = [];
     if (region) primaryQueries.push(`${region} ${fullName}`);
-    if (!hasCampSuffix) primaryQueries.push(`${fullName} 예약`);
+    if (!hasCampSuffix) {
+      primaryQueries.push(`${fullName} 예약`);
+      // 실제 업체명에 '캠핑장' 접미어가 없는 곳(예: '휘게포레스트')도 있어,
+      // 접미어를 붙이지 않은 원래 이름으로도 함께 검색해 검색 결과 누락을 줄인다.
+      if (region) primaryQueries.push(`${region} ${cleanName}`);
+    }
     if (primaryQueries.length === 0) primaryQueries.push(`${fullName} 예약`);
 
     const fallbackQueries = [`${cleanName} 예약`, `${cleanName} 캠핑`].filter(
@@ -148,12 +153,17 @@ export default async function handler(req, res) {
           const verifyResult = await pageContainsName(found.link, cleanName);
           const isDetailPage = cfg.detailPath.test(found.link);
           // camfit/땡큐캠핑 상세페이지가 클라이언트 렌더링(SPA)이라 실제 이름 텍스트가
-          // 정적 HTML엔 없을 수 있다. 그런 경우(verifyResult.checked=true인데 verified=false)라도
-          // 검색 스니펫 단계에서 이미 이름+지역이 모두 일치한 강한 후보라면 신뢰한다.
-          const strongCandidate = nameConfirmed && regionOk === true;
-          const trustedFallback = isDetailPage && regionOk !== false && (!verifyResult.checked || strongCandidate);
+          // 정적 HTML엔 없을 수 있다(verifyResult.checked=true인데 verified=false인 경우).
+          //
+          // 예전엔 "지역명이 검색 스니펫에 없으면(regionOk===false) 무조건 후보 탈락"으로
+          // 처리했는데, 실제로는 스니펫이 지역명을 아예 언급하지 않는 경우가 흔해서
+          // 정확히 이름이 일치하는 캠핑장까지 구글 검색으로 잘못 넘어가는 문제가 있었다.
+          // 이름 일치는 그 자체로 지역 일치보다 강한 신호이므로, 상세페이지 URL이면서
+          // 이름이 스니펫과 일치하면 지역 언급 여부와 무관하게 신뢰한다.
+          const trustedByName = isDetailPage && nameConfirmed;
+          const trustedByRegion = isDetailPage && regionOk === true && (!verifyResult.checked || verifyResult.verified);
 
-          if (regionOk !== false && (verifyResult.verified || trustedFallback)) {
+          if (verifyResult.verified || trustedByName || trustedByRegion) {
             result[key] = found.link;
           }
 
@@ -164,7 +174,8 @@ export default async function handler(req, res) {
               isDetailPage,
               nameConfirmed,
               regionOk,
-              trustedFallback,
+              trustedByName,
+              trustedByRegion,
               ...verifyResult,
             };
           }
