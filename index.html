@@ -1689,8 +1689,10 @@ async function upgradeReservationButtons(name, btnRow, officialUrl, region) {
         console.error('예약페이지 확인 실패:', err);
     } finally {
         if (myGen === sheetGeneration) {
-            fallbackToSearch(btnRow, 'camfit', '캠핏에서 찾기', name);
-            fallbackToSearch(btnRow, 'thankyoucamping', '땡큐캠핑에서 찾기', name);
+            // 자동으로 직접 링크를 못 찾은 경우, 실제로는 구글 검색으로 넘어가므로
+            // 버튼 문구도 '캠핏에서 찾기'처럼 직접 링크인 것처럼 보이지 않게 정직하게 표기한다.
+            fallbackToSearch(btnRow, 'camfit', '구글에서 캠핏 검색', name);
+            fallbackToSearch(btnRow, 'thankyoucamping', '구글에서 땡큐캠핑 검색', name);
         }
     }
 }
