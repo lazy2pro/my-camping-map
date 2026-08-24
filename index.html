@@ -303,6 +303,18 @@
         .gear-qty-btn:active { background: #e9ecef; }
         .gear-qty-value { font-size: 12.5px; font-weight: 600; color: #333; min-width: 28px; text-align: center; }
 
+        .gear-category-group { margin-bottom: 8px; }
+        .gear-category-header {
+            width: 100%; display: flex; justify-content: space-between; align-items: center;
+            background: white; border: none; border-radius: 12px; padding: 12px 14px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08); cursor: pointer;
+            font-size: 14px; font-weight: 700; color: #222; font-family: inherit;
+        }
+        .gear-category-header:active { background: #f8f9fa; }
+        .gear-category-count { font-size: 12px; color: #868e96; font-weight: 600; margin-left: 4px; }
+        .gear-category-arrow { font-size: 10px; color: #adb5bd; }
+        .gear-category-items { padding: 8px 0 0 8px; display: flex; flex-direction: column; gap: 8px; }
+
         /* ---- 공휴일 연동 커스텀 날짜 선택기 ---- */
         .date-input { cursor: pointer; background: #fff; }
         .datepicker-popup {
@@ -406,6 +418,9 @@
             .gear-qty-row { gap: 6px; margin-top: 4px; }
             .gear-qty-btn { width: 20px; height: 20px; font-size: 13px; }
             .gear-qty-value { font-size: 11px; min-width: 22px; }
+            .gear-category-header { padding: 9px 11px; font-size: 12.5px; border-radius: 9px; }
+            .gear-category-count { font-size: 10.5px; }
+            .gear-category-items { padding: 6px 0 0 6px; gap: 6px; }
         }
     </style>
 </head>
@@ -2857,44 +2872,52 @@ wireTextSuggestions(
     () => gearData.items.map((i) => i.manufacturer)
 );
 
+let expandedGearCategories = new Set(); // 펼쳐진 종류(화면 상태, 저장 안 함)
+
 function renderGearView() {
     const listEl = document.getElementById('gear-master-list');
     listEl.innerHTML = '';
     if (gearData.items.length === 0) {
         listEl.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:12px 0;">등록된 장비가 없어요.</div>';
+    } else {
+        const groups = {};
+        gearData.items.forEach((item) => {
+            const cat = item.category || '미분류';
+            if (!groups[cat]) groups[cat] = [];
+            groups[cat].push(item);
+        });
+
+        Object.keys(groups).sort().forEach((cat) => {
+            const items = groups[cat];
+            const isExpanded = expandedGearCategories.has(cat);
+
+            const groupWrap = document.createElement('div');
+            groupWrap.className = 'gear-category-group';
+
+            const header = document.createElement('button');
+            header.type = 'button';
+            header.className = 'gear-category-header';
+            header.innerHTML = `
+                <span>${cat} <span class="gear-category-count">${items.length}개</span></span>
+                <span class="gear-category-arrow">${isExpanded ? '▲' : '▼'}</span>
+            `;
+            header.onclick = () => {
+                if (expandedGearCategories.has(cat)) expandedGearCategories.delete(cat);
+                else expandedGearCategories.add(cat);
+                renderGearView();
+            };
+            groupWrap.appendChild(header);
+
+            if (isExpanded) {
+                const itemsWrap = document.createElement('div');
+                itemsWrap.className = 'gear-category-items';
+                items.forEach((item) => itemsWrap.appendChild(buildGearItemCard(item)));
+                groupWrap.appendChild(itemsWrap);
+            }
+
+            listEl.appendChild(groupWrap);
+        });
     }
-    gearData.items.forEach((item) => {
-        const qty = item.quantity || 1;
-        const card = document.createElement('div');
-        card.className = 'item-card gear-card';
-        let priceLabel = '';
-        if (item.price) {
-            const unit = Number(item.price);
-            priceLabel = qty > 1
-                ? `${unit.toLocaleString('ko-KR')}원 × ${qty} = ${(unit * qty).toLocaleString('ko-KR')}원`
-                : `${unit.toLocaleString('ko-KR')}원`;
-        }
-        card.innerHTML = `
-            <div class="gear-card-info">
-                <div class="gear-card-top">
-                    ${item.category ? `<span class="gear-category-tag">${item.category}</span>` : ''}
-                    ${item.manufacturer ? `<span class="gear-manufacturer">${item.manufacturer}</span>` : ''}
-                </div>
-                <div class="gear-name">${item.name}</div>
-                ${priceLabel ? `<div class="gear-price">${priceLabel}</div>` : ''}
-                <div class="gear-qty-row">
-                    <button type="button" class="gear-qty-btn gear-qty-minus">−</button>
-                    <span class="gear-qty-value">${qty}개</span>
-                    <button type="button" class="gear-qty-btn gear-qty-plus">+</button>
-                </div>
-            </div>
-            <button class="item-del-btn">✕</button>
-        `;
-        card.querySelector('.gear-qty-minus').onclick = () => changeGearQty(item.id, -1);
-        card.querySelector('.gear-qty-plus').onclick = () => changeGearQty(item.id, 1);
-        card.querySelector('.item-del-btn').onclick = () => deleteGearItem(item.id);
-        listEl.appendChild(card);
-    });
 
     // 종류/제조사 자동완성은 wireTextSuggestions가 gearData.items를 그때그때 직접 참조하므로 여기서 따로 갱신할 필요 없다.
 
@@ -2906,6 +2929,40 @@ function renderGearView() {
     activeChecklistName = (prevSelected && names.includes(prevSelected)) ? prevSelected : null;
     select.value = activeChecklistName || '';
     renderChecklistDetail();
+}
+
+// 장비 한 개의 카드(제조사/이름/가격/수량 스테퍼/삭제)를 만든다. 종류별 목록 펼침에서 재사용.
+function buildGearItemCard(item) {
+    const qty = item.quantity || 1;
+    const card = document.createElement('div');
+    card.className = 'item-card gear-card';
+    let priceLabel = '';
+    if (item.price) {
+        const unit = Number(item.price);
+        priceLabel = qty > 1
+            ? `${unit.toLocaleString('ko-KR')}원 × ${qty} = ${(unit * qty).toLocaleString('ko-KR')}원`
+            : `${unit.toLocaleString('ko-KR')}원`;
+    }
+    card.innerHTML = `
+        <div class="gear-card-info">
+            <div class="gear-card-top">
+                ${item.category ? `<span class="gear-category-tag">${item.category}</span>` : ''}
+                ${item.manufacturer ? `<span class="gear-manufacturer">${item.manufacturer}</span>` : ''}
+            </div>
+            <div class="gear-name">${item.name}</div>
+            ${priceLabel ? `<div class="gear-price">${priceLabel}</div>` : ''}
+            <div class="gear-qty-row">
+                <button type="button" class="gear-qty-btn gear-qty-minus">−</button>
+                <span class="gear-qty-value">${qty}개</span>
+                <button type="button" class="gear-qty-btn gear-qty-plus">+</button>
+            </div>
+        </div>
+        <button class="item-del-btn">✕</button>
+    `;
+    card.querySelector('.gear-qty-minus').onclick = () => changeGearQty(item.id, -1);
+    card.querySelector('.gear-qty-plus').onclick = () => changeGearQty(item.id, 1);
+    card.querySelector('.item-del-btn').onclick = () => deleteGearItem(item.id);
+    return card;
 }
 
 function changeGearQty(id, delta) {
