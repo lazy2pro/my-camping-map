@@ -294,6 +294,14 @@
         .gear-manufacturer { font-size: 12px; color: #868e96; }
         .gear-name { font-size: 14px; font-weight: 600; color: #222; margin-top: 3px; }
         .gear-price { font-size: 12.5px; color: #1c7ed6; font-weight: 700; margin-top: 2px; }
+        .gear-qty-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+        .gear-qty-btn {
+            width: 24px; height: 24px; border-radius: 50%; border: none; background: #f1f3f5;
+            color: #495057; font-size: 15px; line-height: 1; cursor: pointer; font-weight: 700;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .gear-qty-btn:active { background: #e9ecef; }
+        .gear-qty-value { font-size: 12.5px; font-weight: 600; color: #333; min-width: 28px; text-align: center; }
 
         /* ---- 공휴일 연동 커스텀 날짜 선택기 ---- */
         .date-input { cursor: pointer; background: #fff; }
@@ -395,6 +403,9 @@
             .gear-manufacturer { font-size: 10.5px; }
             .gear-name { font-size: 12.5px; }
             .gear-price { font-size: 11px; }
+            .gear-qty-row { gap: 6px; margin-top: 4px; }
+            .gear-qty-btn { width: 20px; height: 20px; font-size: 13px; }
+            .gear-qty-value { font-size: 11px; min-width: 22px; }
         }
     </style>
 </head>
@@ -2853,9 +2864,16 @@ function renderGearView() {
         listEl.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:12px 0;">등록된 장비가 없어요.</div>';
     }
     gearData.items.forEach((item) => {
+        const qty = item.quantity || 1;
         const card = document.createElement('div');
         card.className = 'item-card gear-card';
-        const priceLabel = item.price ? `${Number(item.price).toLocaleString('ko-KR')}원` : '';
+        let priceLabel = '';
+        if (item.price) {
+            const unit = Number(item.price);
+            priceLabel = qty > 1
+                ? `${unit.toLocaleString('ko-KR')}원 × ${qty} = ${(unit * qty).toLocaleString('ko-KR')}원`
+                : `${unit.toLocaleString('ko-KR')}원`;
+        }
         card.innerHTML = `
             <div class="gear-card-info">
                 <div class="gear-card-top">
@@ -2864,9 +2882,16 @@ function renderGearView() {
                 </div>
                 <div class="gear-name">${item.name}</div>
                 ${priceLabel ? `<div class="gear-price">${priceLabel}</div>` : ''}
+                <div class="gear-qty-row">
+                    <button type="button" class="gear-qty-btn gear-qty-minus">−</button>
+                    <span class="gear-qty-value">${qty}개</span>
+                    <button type="button" class="gear-qty-btn gear-qty-plus">+</button>
+                </div>
             </div>
             <button class="item-del-btn">✕</button>
         `;
+        card.querySelector('.gear-qty-minus').onclick = () => changeGearQty(item.id, -1);
+        card.querySelector('.gear-qty-plus').onclick = () => changeGearQty(item.id, 1);
         card.querySelector('.item-del-btn').onclick = () => deleteGearItem(item.id);
         listEl.appendChild(card);
     });
@@ -2881,6 +2906,15 @@ function renderGearView() {
     activeChecklistName = (prevSelected && names.includes(prevSelected)) ? prevSelected : null;
     select.value = activeChecklistName || '';
     renderChecklistDetail();
+}
+
+function changeGearQty(id, delta) {
+    const item = gearData.items.find((i) => i.id === id);
+    if (!item) return;
+    const current = item.quantity || 1;
+    item.quantity = Math.max(1, current + delta);
+    saveGearData(gearData);
+    renderGearView();
 }
 
 function addGearItem() {
@@ -2899,7 +2933,7 @@ function addGearItem() {
 
     gearData.items.push({
         id: Date.now() + Math.random().toString(16).slice(2),
-        category, manufacturer, name, price,
+        category, manufacturer, name, price, quantity: 1,
     });
     saveGearData(gearData);
 
@@ -2951,9 +2985,10 @@ function renderChecklistDetail() {
             const card = document.createElement('div');
             card.className = 'item-card';
             const checked = checklist[item.id];
+            const qty = item.quantity || 1;
             card.innerHTML = `
                 <input type="checkbox" class="item-checkbox" ${checked ? 'checked' : ''}>
-                <span class="item-name ${checked ? 'checked' : ''}">${item.name}</span>
+                <span class="item-name ${checked ? 'checked' : ''}">${item.name}${qty > 1 ? ` × ${qty}` : ''}</span>
             `;
             card.querySelector('.item-checkbox').onchange = (e) => {
                 gearData.checklists[activeChecklistName][item.id] = e.target.checked;
