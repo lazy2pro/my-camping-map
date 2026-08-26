@@ -60,7 +60,7 @@ export default async function handler(req, res) {
     // 그래서 '캠핑장/야영장' 뒤에 한글이 곧바로 더 이어지면(=다른 단어의 일부라는 뜻)
     // 매칭하지 않도록 부정형 전방탐색을 추가해 단어 경계를 지킨다.
     const CAMPSITE_PATTERN = /(야영장|캠핑장|글램핑장|글램핑존|오토캠핑장|카라반\s*파크)(?![가-힣])/;
-    const NON_CAMPSITE_PATTERN = /(용품|장비|판매|렌탈|대여|매매|수리|정비|딜러|대리점|전문점|제작|시공|설치|캠핑카|트레일러|협회|연합회|조합|사무국|본부|지회|단체|법인|공단|진흥원|재단|족구장|화장실|샤워장|취사장|정자|야외무대|물놀이장|주차장|관리사무소|안내소|매표소|체육시설|운동장|놀이터|정문|후문|입구|매점)/;
+    const NON_CAMPSITE_PATTERN = /(용품|장비|판매|렌탈|대여|매매|수리|정비|딜러|대리점|전문점|제작|시공|설치|캠핑카|트레일러|협회|연합회|조합|사무국|사무실|사무소|본사|지사|영업소|예약센터|고객센터|콜센터|본부|지회|단체|법인|공단|진흥원|재단|족구장|화장실|샤워장|취사장|정자|야외무대|물놀이장|주차장|관리사무소|안내소|매표소|체육시설|운동장|놀이터|정문|후문|입구|매점)/;
 
     const pickAddress = (it) => {
       const road = strip(it.roadAddress);
@@ -69,12 +69,25 @@ export default async function handler(req, res) {
       return jibun || road;
     };
 
+    // 실제 캠핑장은 이름/카테고리가 그럴듯해도 절대 도심 오피스 빌딩 안에 있을 수 없다.
+    // '카라반파크일박이일'처럼 이름은 캠핑장 같지만 주소가 'OO빌딩'인 경우는 운영 사무실이지
+    // 실제 야영지가 아니므로, 주소에 사무용 건물 표현이 있으면 이름/카테고리와 무관하게 제외한다.
+    const OFFICE_ADDRESS_PATTERN = /(빌딩|타워|오피스텔|비즈니스센터|파이낸스센터|상가|스퀘어)/;
+
+    // 캠핑 컨셉으로 꾸민 음식점/카페/술집도 흔하다(예: 이름은 '우리동네캠핑장'인데
+    // 실제 네이버 카테고리는 '한식' 식당). 이런 곳은 카테고리로 확실히 구분되므로,
+    // 카테고리가 음식점/카페 계열이면 이름과 무관하게 제외한다.
+    const FOOD_CATEGORY_PATTERN = /(음식점|한식|중식|일식|양식|분식|고기|카페|디저트|베이커리|치킨|주점|포장마차|이자카야|레스토랑|푸드)/;
+
     const items = (data.items || [])
       .filter((it) => {
         if (skipCampFilter) return true;
         const category = strip(it.category);
         const title = strip(it.title);
+        const address = strip(it.roadAddress) || strip(it.address);
         if (NON_CAMPSITE_PATTERN.test(category) || NON_CAMPSITE_PATTERN.test(title)) return false;
+        if (FOOD_CATEGORY_PATTERN.test(category)) return false;
+        if (OFFICE_ADDRESS_PATTERN.test(address)) return false;
         return CAMPSITE_PATTERN.test(category) || CAMPSITE_PATTERN.test(title);
       })
       .map((it) => ({

@@ -112,7 +112,9 @@ export default async function handler(req, res) {
         return stripped.length >= 2 && stripped !== t ? [t, stripped] : [t];
       });
     const normalizeText = (s) => (s || '').replace(/<[^>]*>/g, '').toLowerCase().replace(/\s+/g, '');
-    
+    // 공백을 유지한 버전. 핵심단어(접두어) 매칭에서 단어 경계를 확인하는 데 쓴다.
+    const normalizeSpaced = (s) => (s || '').replace(/<[^>]*>/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
     const snippetMatchesRegion = (it) => {
       if (!regionTokens.length) return null;
       const snippet = normalizeText(it.title) + normalizeText(it.description);
@@ -123,13 +125,27 @@ export default async function handler(req, res) {
     const fullCampNameAlt = hasCampSuffix ? null : normalizeText(cleanName + '야영장');
     const coreCampName = stripCampSuffix(fullCampName);
 
-    const snippetMatchesFullName = (it) => {
+    // 핵심단어(접미어를 뗀 이름, 예: '두리')가 문자열 아무데나 있으면 매칭되는 방식은 위험하다.
+    // '두리캠핑장'을 찾는데 '원주두리 1캠핑장'(전혀 다른 지역의 다른 캠핑장) 안에도
+    // '두리'가 그대로 들어있어서 같은 곳으로 오인될 수 있기 때문이다.
+    // 그래서 핵심단어는 문자열 맨 앞이거나 공백 바로 뒤에서 시작할 때만("갈기산펜션캠핑장"처럼
+    // 핵심단어+접미어변형 패턴은 허용) 인정하고, 다른 단어 중간에 파묻힌 경우는 인정하지 않는다.
+    function coreNameMatchesAsPrefix(text) {
+      if (coreCampName.length < 2) return false;
+      const escaped = coreCampName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`(^|\\s)${escaped}`, 'i').test(text);
+    }
+
+    const snippetNameMatchType = (it) => {
       const snippet = normalizeText(it.title) + normalizeText(it.description);
-      if (snippet.includes(fullCampName) || (fullCampNameAlt && snippet.includes(fullCampNameAlt))) return true;
-      // 완전일치 실패 시, 접미어를 뗀 핵심 키워드만이라도 있으면 후보로 인정한다
-      // (예: '갈기산캠핑장' 검색 -> 스니펫엔 '갈기산펜션캠핑장'만 있는 경우).
-      return coreCampName.length >= 2 && snippet.includes(coreCampName);
+      if (snippet.includes(fullCampName) || (fullCampNameAlt && snippet.includes(fullCampNameAlt))) return 'exact';
+      // 완전일치 실패 시, 접미어를 뗀 핵심 키워드가 '단어 시작 위치'에 있으면만 후보로 인정한다
+      // (예: '갈기산캠핑장' 검색 -> 스니펫엔 '갈기산펜션캠핑장'만 있는 경우는 허용,
+      //      '두리캠핑장' 검색 -> 스니펫이 '원주두리 1캠핑장'인 경우는 불허).
+      const spacedSnippet = normalizeSpaced(it.title) + ' ' + normalizeSpaced(it.description);
+      return coreNameMatchesAsPrefix(spacedSnippet) ? 'core' : null;
     };
+    const snippetMatchesFullName = (it) => snippetNameMatchType(it) !== null;
 
     const [, officialValid] = await Promise.all([
       Promise.all(
@@ -146,24 +162,27 @@ export default async function handler(req, res) {
           const fullNameMatched = domainMatches.find((it) => snippetMatchesFullName(it));
           const regionMatched = domainMatches.find((it) => snippetMatchesRegion(it) === true);
           const found = nameAndRegionMatched || fullNameMatched || regionMatched || domainMatches[0];
-          const nameConfirmed = snippetMatchesFullName(found);
+          const nameMatchType = snippetNameMatchType(found); // 'exact' | 'core' | null
           const regionOk = snippetMatchesRegion(found);
 
           candidateFound[key] = true;
           const verifyResult = await pageContainsName(found.link, cleanName);
           const isDetailPage = cfg.detailPath.test(found.link);
           // camfit/땡큐캠핑 상세페이지가 클라이언트 렌더링(SPA)이라 실제 이름 텍스트가
-          // 정적 HTML엔 없을 수 있다(verifyResult.checked=true인데 verified=false인 경우).
+          // 정적 HTML엔 없을 수 있다(verifyResult.checked=true인데 matchType=null인 경우).
           //
-          // 예전엔 "지역명이 검색 스니펫에 없으면(regionOk===false) 무조건 후보 탈락"으로
-          // 처리했는데, 실제로는 스니펫이 지역명을 아예 언급하지 않는 경우가 흔해서
-          // 정확히 이름이 일치하는 캠핑장까지 구글 검색으로 잘못 넘어가는 문제가 있었다.
-          // 이름 일치는 그 자체로 지역 일치보다 강한 신호이므로, 상세페이지 URL이면서
-          // 이름이 스니펫과 일치하면 지역 언급 여부와 무관하게 신뢰한다.
-          const trustedByName = isDetailPage && nameConfirmed;
-          const trustedByRegion = isDetailPage && regionOk === true && (!verifyResult.checked || verifyResult.verified);
+          // 신뢰 등급을 신호 강도에 따라 나눈다:
+          // - 검색 스니펫/페이지 본문에서 이름이 완전히 일치하면(exact) 지역과 무관하게 확실하다.
+          // - 접미어를 뗀 핵심단어만 일치(core)하는 경우는 '두리' 같은 짧은 단어가 다른 지역
+          //   캠핑장 이름 중간에 우연히 들어있을 위험이 있으므로, 지역이 명백히 틀린
+          //   (regionOk===false) 게 아닐 때만 신뢰한다 (지역 정보가 없거나(null) 실제로
+          //   일치하면 통과).
+          const trustedByExactName = isDetailPage && nameMatchType === 'exact';
+          const trustedByWeakName = isDetailPage && nameMatchType === 'core' && regionOk !== false;
+          const trustedByWeakPageMatch = isDetailPage && verifyResult.matchType === 'core' && regionOk !== false;
+          const trustedByRegion = isDetailPage && regionOk === true && !verifyResult.checked;
 
-          if (verifyResult.verified || trustedByName || trustedByRegion) {
+          if (verifyResult.matchType === 'exact' || trustedByExactName || trustedByWeakName || trustedByWeakPageMatch || trustedByRegion) {
             result[key] = found.link;
           }
 
@@ -172,9 +191,11 @@ export default async function handler(req, res) {
               candidateFound: true,
               candidateLink: found.link,
               isDetailPage,
-              nameConfirmed,
+              nameMatchType,
               regionOk,
-              trustedByName,
+              trustedByExactName,
+              trustedByWeakName,
+              trustedByWeakPageMatch,
               trustedByRegion,
               ...verifyResult,
             };
@@ -240,22 +261,27 @@ async function pageContainsName(url, name) {
     const normalizedHtml = normalize(html.slice(0, 25000));
     const normalizedName = normalize(name);
 
-    let found = normalizedHtml.includes(normalizedName);
-    let reason = found ? '이름 완전일치' : '';
+    const exactMatch = normalizedHtml.includes(normalizedName);
+    let matchType = exactMatch ? 'exact' : null;
+    let reason = exactMatch ? '이름 완전일치' : '';
 
-    if (!found) {
+    if (!exactMatch) {
       // 검색에 쓰인 이름과 실제 업체 표기가 접미어만 다른 경우
       // (예: '갈기산캠핑장' 검색 -> 실제 페이지는 '갈기산펜션캠핑장')
       // 완전일치가 실패해도 핵심 키워드가 페이지에 있으면 같은 곳으로 간주한다.
+      // 단, 이건 페이지 원문(HTML)을 통째로 훑는 느슨한 매칭이라 짧은 핵심단어일수록
+      // 스크립트/속성 등에 우연히 섞여 들어갈 위험이 있으므로 'core'(약한 신호)로 구분해
+      // 반환하고, 최종 판단(지역 신호와 함께 볼지)은 호출부에서 하게 한다.
       const core = stripCampSuffix(normalizedName);
       if (core.length >= 2 && normalizedHtml.includes(core)) {
-        found = true;
+        matchType = 'core';
         reason = '핵심 키워드 일치 (접미어 차이 허용)';
       }
     }
 
     return {
-      verified: found,
+      verified: matchType === 'exact',
+      matchType,
       checked: true,
       reason: reason || '페이지 내 미검출',
     };
