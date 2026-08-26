@@ -2,6 +2,8 @@
 const TARGET_SITES = {
   camfit: { pattern: /camfit\.co\.kr/i, detailPath: /\/camp\/[a-z0-9]+/i },
   thankyoucamping: { pattern: /thankqcamping\.com/i, detailPath: /cseq=\d+/i },
+  // 캠핏/땡큐캠핑에 없는 캠핑장 중 일부는 인터파크 NOL 티켓(구 인터파크 티켓)에서 예매를 받는다.
+  interpark: { pattern: /tickets?\.interpark\.com/i, detailPath: /\/goods\/\d+/i },
 };
 
 // 캠핑장 이름 끝에 흔히 붙는 접미어. 검색엔진 상 실제 업체명 표기가
@@ -97,8 +99,8 @@ export default async function handler(req, res) {
     }
 
     const debug = req.query.debug === '1';
-    const result = { camfit: null, thankyoucamping: null };
-    const candidateFound = { camfit: false, thankyoucamping: false };
+    const result = { camfit: null, thankyoucamping: null, interpark: null };
+    const candidateFound = { camfit: false, thankyoucamping: false, interpark: false };
     const debugInfo = { allLinks: [...new Set(items.map((it) => it.link))] };
 
     // 행정구역 접미어(도/시/군/구/읍/면 등) 표기가 사이트마다 다를 수 있어
