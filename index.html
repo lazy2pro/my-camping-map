@@ -658,6 +658,7 @@ function isReservationWorthyUrl(url) {
 const SITE_PATTERNS = {
     camfit: /camfit\.co\.kr/i,
     thankyoucamping: /thankqcamping\.com/i,
+    interpark: /tickets?\.interpark\.com/i,
 };
 
 function detectDirectSiteLinks(item) {
@@ -666,6 +667,7 @@ function detectDirectSiteLinks(item) {
         if (!isReservationWorthyUrl(url)) return;
         if (!links.camfit && SITE_PATTERNS.camfit.test(url)) links.camfit = url;
         if (!links.thankyoucamping && SITE_PATTERNS.thankyoucamping.test(url)) links.thankyoucamping = url;
+        if (!links.interpark && SITE_PATTERNS.interpark.test(url)) links.interpark = url;
     });
     return links;
 }
@@ -1723,6 +1725,23 @@ function openSheet(item) {
         });
     }
 
+    if (directLinks.interpark) {
+        buttons.push({
+            href: directLinks.interpark,
+            label: '인터파크 예약페이지 바로가기',
+            cls: buttons.length === 0 ? 'primary' : 'secondary',
+            role: 'interpark',
+        });
+    } else {
+        buttons.push({
+            href: null,
+            label: '인터파크 확인 중…',
+            cls: 'disabled',
+            role: 'interpark',
+            pending: true,
+        });
+    }
+
     // 티맵 앱 딥링크(비공식 스킴)로 바로 경로안내. 지도 이동 없이 앱만 열리므로
     // 다른 버튼과 겹치는 정보가 아니라 항상 추가한다.
     buttons.push({
@@ -1770,7 +1789,7 @@ function openSheet(item) {
     // 캠핏/땡큐캠핑 링크를 이미 둘 다 직접 확보했고 official 버튼도 없다면,
     // 굳이 reservation-link API를 호출할 필요가 없다 (불필요한 백엔드 호출 절감).
     const hasOfficialButton = buttons.some((b) => b.role === 'official');
-    const hasPendingSite = !directLinks.camfit || !directLinks.thankyoucamping;
+    const hasPendingSite = !directLinks.camfit || !directLinks.thankyoucamping || !directLinks.interpark;
     if (hasOfficialButton || hasPendingSite) {
         const region = (item.address || '').split(/\s+/).slice(0, 2).join(' ');
         upgradeReservationButtons(item.name, btnRow, item.resveUrl, region);
@@ -1845,12 +1864,18 @@ async function upgradeReservationButtons(name, btnRow, officialUrl, region) {
             data.candidateFound && data.candidateFound.thankyoucamping === false,
             '땡큐캠핑 예약페이지 바로가기', '땡큐캠핑에 없는 캠핑장'
         );
+        resolvePendingButton(
+            btnRow, 'interpark', data.interpark,
+            data.candidateFound && data.candidateFound.interpark === false,
+            '인터파크 예약페이지 바로가기', '인터파크에 없는 캠핑장'
+        );
     } catch (err) {
         console.error('예약페이지 확인 실패:', err);
     } finally {
         if (myGen === sheetGeneration) {
             fallbackToSearch(btnRow, 'camfit');
             fallbackToSearch(btnRow, 'thankyoucamping');
+            fallbackToSearch(btnRow, 'interpark');
         }
     }
 }
