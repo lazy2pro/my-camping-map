@@ -1002,11 +1002,15 @@ function initMap() {
     updateWeatherForMapCenter();
 }
 
-const ZOOM_RADIUS_M = { 6: 100000, 7: 60000, 8: 40000, 9: 25000, 10: 15000, 11: 10000, 12: 6000, 13: 4000, 14: 2000, 15: 1200, 16: 800, 17: 500 };
-function calcRadiusFromZoom() {
-    const zoom = Math.round(map.getZoom());
-    const m = ZOOM_RADIUS_M[zoom] || 10000;
-    return Math.min(m, 20000);
+// 예전엔 줌 레벨 -> 반경 고정표를 썼는데, 이건 좁은 화면(모바일) 기준으로 잡혀 있어서
+// 넓은 데스크톱 창에서는 실제로 보이는 영역이 표보다 훨씬 넓어 원이 화면에 비해 작아 보였다.
+// 그래서 map.getBounds()로 지금 실제 보이는 영역을 구해, 그 대각선의 절반(중심에서 가장 먼
+// 모서리까지의 거리)을 "이 화면을 덮으려면 필요한 반경"으로 직접 계산한다.
+function calcViewRadiusMeters() {
+    const bounds = map.getBounds();
+    const sw = bounds.getSW();
+    const ne = bounds.getNE();
+    return distanceMeters(sw.lat(), sw.lng(), ne.lat(), ne.lng()) / 2;
 }
 
 // 고캠핑 API는 지도 중심 기준 반경 최대 20km까지만 검색을 허용한다. 많이 축소된 상태에서는
@@ -1116,9 +1120,8 @@ async function fetchCampsInView() {
     const center = map.getCenter();
     const lat = center.lat();
     const lng = center.lng();
-    const zoom = Math.round(map.getZoom());
-    const idealRadius = ZOOM_RADIUS_M[zoom] || 10000;
-    const radius = calcRadiusFromZoom();
+    const idealRadius = calcViewRadiusMeters();
+    const radius = Math.min(idealRadius, GRID_TILE_RADIUS_M);
     // 지도 중심 하나(반경 최대 20km)로는 화면 전체를 못 덮을 만큼 축소된 상태면, 화면을 격자로
     // 나눠 여러 지점을 검색해서 합친다. 그 정도로 축소되지 않았으면 기존처럼 중심 하나만 검색한다.
     const needsGrid = idealRadius > GRID_TILE_RADIUS_M;
