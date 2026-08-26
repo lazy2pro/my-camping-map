@@ -40,6 +40,12 @@ export default async function handler(req, res) {
       strip(s).replace(/제\s?\d+\s?(캠핑장|야영장|캠핑존|지구|존|사이트|캠핑구역|구역)$/, '').trim();
     const skipCampFilter = req.query.raw === '1';
 
+    // '캠핑'이라는 단어만 보고 거르면, 캠핑용품점·카라반 판매/렌탈업체·캠핑카 딜러처럼
+    // 실제 야영지가 아닌 업체까지 걸린다(예: 캠핑용품 카테고리의 스마트락 업체).
+    // 그래서 실제 야영지 카테고리 표현만 허용하고, 판매/렌탈/용품 등은 명시적으로 제외한다.
+    const CAMPSITE_PATTERN = /(야영장|캠핑장|글램핑장|글램핑존|오토캠핑장|카라반\s*파크)/;
+    const NON_CAMPSITE_PATTERN = /(용품|판매|렌탈|대여|매매|수리|정비|딜러|대리점|전문점|제작|시공|설치|캠핑카|트레일러)/;
+
     const pickAddress = (it) => {
       const road = strip(it.roadAddress);
       const jibun = strip(it.address);
@@ -48,7 +54,13 @@ export default async function handler(req, res) {
     };
 
     const items = (data.items || [])
-      .filter((it) => skipCampFilter || strip(it.category).includes('캠핑') || strip(it.title).includes('캠핑'))
+      .filter((it) => {
+        if (skipCampFilter) return true;
+        const category = strip(it.category);
+        const title = strip(it.title);
+        if (NON_CAMPSITE_PATTERN.test(category) || NON_CAMPSITE_PATTERN.test(title)) return false;
+        return CAMPSITE_PATTERN.test(category) || CAMPSITE_PATTERN.test(title);
+      })
       .map((it) => ({
         name: normalizeName(it.title) || strip(it.title),
         category: strip(it.category),
