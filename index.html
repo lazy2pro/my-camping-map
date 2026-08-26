@@ -460,6 +460,7 @@
     <span><span class="dot" style="background:#2b8a3e;"></span>고캠핑 등록 캠핑장</span>
     <span><span class="dot" style="background:#e8590c;"></span>고캠핑 미등록 (보완 검색)</span>
     <span><span class="dot" style="background:#1c7ed6;"></span>⛽ 실내등유 판매 주유소</span>
+    <span style="color:#868e96;"><span class="dot" style="background:transparent; border:1.5px solid #2b8a3e;"></span>초록 원 = 실제 검색 범위(최대 20km)</span>
     <span id="weather-legend-line" style="display:none; font-weight:600; padding-top:2px; border-top:1px solid #f1f3f5; margin-top:2px;"></span>
 </div>
 
@@ -1008,6 +1009,99 @@ function calcRadiusFromZoom() {
     return Math.min(m, 20000);
 }
 
+// 고캠핑 API는 지도 중심 기준 반경 최대 20km까지만 검색을 허용한다. 많이 축소된 상태에서는
+// 화면에 보이는 넓은 영역 중 이 20km 원 안에 있는 캠핑장만 표시되므로, 지도를 살짝만
+// 옮겨도(원의 위치가 바뀌므로) 표시되는 캠핑장이 완전히 달라 보일 수 있다.
+// 이 원을 지도 위에 실제로 그려서, 왜 그렇게 보이는지 한눈에 알 수 있게 한다.
+let searchRadiusCircle = null;
+
+function updateSearchRadiusCircle(lat, lng, radiusMeters) {
+    const center = new naver.maps.LatLng(lat, lng);
+    if (!searchRadiusCircle) {
+        searchRadiusCircle = new naver.maps.Circle({
+            map,
+            center,
+            radius: radiusMeters,
+            strokeColor: '#2b8a3e',
+            strokeOpacity: 0.45,
+            strokeWeight: 1,
+            fillColor: '#2b8a3e',
+            fillOpacity: 0.04,
+            clickable: false,
+            zIndex: 1,
+        });
+    } else {
+        searchRadiusCircle.setCenter(center);
+        searchRadiusCircle.setRadius(radiusMeters);
+    }
+    searchRadiusCircle.setMap(map);
+    clearSearchGridCircles();
+}
+
+// ---- 화면이 넓게 축소된 상태에서는, 지도 중심 하나만 검색해선 화면 대부분이 빈 채로 남으므로
+// 화면(bounds)을 격자로 나눠 여러 지점을 검색해서 합친다(그리드 타일링). ----
+const GRID_TILE_RADIUS_M = 20000; // 고캠핑 API가 허용하는 최대 반경
+const GRID_TILE_SPACING_M = 30000; // 반경보다 살짝 넓게 잡아 인접 원끼리 겹치게 해서 사각형 화면의 빈틈을 줄인다
+const GRID_MAX_TILES = 12; // API 호출이 과도해지지 않도록 두는 상한
+
+function buildSearchGrid(bounds) {
+    const sw = bounds.getSW();
+    const ne = bounds.getNE();
+    const latSpan = ne.lat() - sw.lat();
+    const lngSpan = ne.lng() - sw.lng();
+
+    const midLat = (sw.lat() + ne.lat()) / 2;
+    const metersPerDegLat = 111320;
+    const metersPerDegLng = 111320 * Math.cos(midLat * Math.PI / 180);
+
+    const heightM = latSpan * metersPerDegLat;
+    const widthM = lngSpan * metersPerDegLng;
+
+    let cols = Math.max(1, Math.ceil(widthM / GRID_TILE_SPACING_M));
+    let rows = Math.max(1, Math.ceil(heightM / GRID_TILE_SPACING_M));
+
+    // 타일 수가 상한을 넘으면, 더 넓은 축(행/열)을 하나씩 줄여서 상한 안으로 맞춘다.
+    // (완벽하게 빈틈없이 덮진 못하지만, 중심 하나만 보는 것보단 훨씬 넓게 커버한다.)
+    while (cols * rows > GRID_MAX_TILES && (cols > 1 || rows > 1)) {
+        if (cols >= rows) cols = Math.max(1, cols - 1);
+        else rows = Math.max(1, rows - 1);
+    }
+
+    const points = [];
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const lat = sw.lat() + (latSpan * (r + 0.5)) / rows;
+            const lng = sw.lng() + (lngSpan * (c + 0.5)) / cols;
+            points.push({ lat, lng });
+        }
+    }
+    return points;
+}
+
+let searchGridCircles = [];
+
+function updateSearchGridCircles(points, radiusMeters) {
+    if (searchRadiusCircle) searchRadiusCircle.setMap(null);
+    clearSearchGridCircles();
+    searchGridCircles = points.map((p) => new naver.maps.Circle({
+        map,
+        center: new naver.maps.LatLng(p.lat, p.lng),
+        radius: radiusMeters,
+        strokeColor: '#2b8a3e',
+        strokeOpacity: 0.35,
+        strokeWeight: 1,
+        fillColor: '#2b8a3e',
+        fillOpacity: 0.03,
+        clickable: false,
+        zIndex: 1,
+    }));
+}
+
+function clearSearchGridCircles() {
+    searchGridCircles.forEach((c) => c.setMap(null));
+    searchGridCircles = [];
+}
+
 async function fetchCampsInView() {
     if (!map) return;
 
@@ -1015,21 +1109,59 @@ async function fetchCampsInView() {
         currentFetchController.abort();
     }
     currentFetchController = new AbortController();
+    const signal = currentFetchController.signal;
 
     showStatus('주변 캠핑장 불러오는 중...');
 
     const center = map.getCenter();
     const lat = center.lat();
     const lng = center.lng();
+    const zoom = Math.round(map.getZoom());
+    const idealRadius = ZOOM_RADIUS_M[zoom] || 10000;
     const radius = calcRadiusFromZoom();
+    // 지도 중심 하나(반경 최대 20km)로는 화면 전체를 못 덮을 만큼 축소된 상태면, 화면을 격자로
+    // 나눠 여러 지점을 검색해서 합친다. 그 정도로 축소되지 않았으면 기존처럼 중심 하나만 검색한다.
+    const needsGrid = idealRadius > GRID_TILE_RADIUS_M;
 
     try {
-        const data = await fetchCampsData(lat, lng, radius, currentFetchController.signal);
+        let camps;
+        let gridPoints = null;
 
-        renderCamps(data.camps);
-        showStatus(`캠핑장 ${data.camps.length}곳 표시 중`, false, 1500);
+        if (needsGrid) {
+            gridPoints = buildSearchGrid(map.getBounds());
+            const results = await Promise.all(
+                gridPoints.map((p) =>
+                    fetchCampsData(p.lat, p.lng, GRID_TILE_RADIUS_M, signal).catch((err) => {
+                        if (err.name === 'AbortError') throw err;
+                        console.error('그리드 타일 검색 실패:', err);
+                        return { camps: [] };
+                    })
+                )
+            );
+            const merged = new Map();
+            results.forEach((r) => (r.camps || []).forEach((c) => merged.set(c.id, c)));
+            camps = [...merged.values()];
+        } else {
+            const data = await fetchCampsData(lat, lng, radius, signal);
+            camps = data.camps;
+        }
 
-        const extra = await fetchNaverSupplementaryCamps(data.camps, lat, lng, currentFetchController.signal);
+        renderCamps(camps);
+
+        if (needsGrid) {
+            updateSearchGridCircles(gridPoints, GRID_TILE_RADIUS_M);
+            showStatus(`캠핑장 ${camps.length}곳 표시 중 (화면 전체, ${gridPoints.length}개 구역으로 나눠 검색)`, false, 2500);
+        } else {
+            updateSearchRadiusCircle(lat, lng, radius);
+            const radiusKm = Math.round(radius / 1000);
+            const isCapped = idealRadius > radius;
+            const msg = isCapped
+                ? `캠핑장 ${camps.length}곳 표시 중 (지도 중심 반경 ${radiusKm}km까지만 검색돼요 · 지도를 이동해보세요)`
+                : `캠핑장 ${camps.length}곳 표시 중 (반경 ${radiusKm}km)`;
+            showStatus(msg, false, isCapped ? 3500 : 1800);
+        }
+
+        const extra = await fetchNaverSupplementaryCamps(camps, lat, lng, signal);
         if (extra.length) {
             addMarkers(extra, ORANGE_ICON);
         }
@@ -1485,6 +1617,7 @@ async function fetchCampsAt(lat, lng, radius) {
     try {
         const data = await fetchCampsData(lat, lng, radius);
         renderCamps(data.camps);
+        updateSearchRadiusCircle(lat, lng, radius);
         const extra = await fetchNaverSupplementaryCamps(data.camps, lat, lng);
         if (extra.length) {
             addMarkers(extra, ORANGE_ICON);
