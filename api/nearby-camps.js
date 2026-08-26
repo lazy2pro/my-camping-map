@@ -36,8 +36,17 @@ export default async function handler(req, res) {
     }
 
     const strip = (s) => (s || '').replace(/<[^>]*>/g, '').trim();
-    const normalizeName = (s) =>
-      strip(s).replace(/제\s?\d+\s?(캠핑장|야영장|캠핑존|지구|존|사이트|캠핑구역|구역)$/, '').trim();
+    // 'OO캠핑장 제2지구' 같은 이름은 접미어를 잘라 'OO캠핑장'으로 정리하되(여러 구역을 하나로 통합),
+    // '관악산 제2야영장'처럼 잘라낸 결과에 '캠핑장/야영장' 정체성이 아예 안 남는 경우(산 이름만 남는 등)는
+    // 오히려 무엇인지 알아볼 수 없게 되므로 자르지 않고 원래 이름 그대로 둔다.
+    const normalizeName = (s) => {
+      const original = strip(s);
+      const stripped = original.replace(/제\s?\d+\s?(캠핑장|야영장|캠핑존|지구|존|사이트|캠핑구역|구역)$/, '').trim();
+      if (stripped !== original && !/캠핑장|야영장|글램핑/.test(stripped)) {
+        return original;
+      }
+      return stripped;
+    };
     const skipCampFilter = req.query.raw === '1';
 
     // '캠핑'이라는 단어만 보고 거르면, 캠핑용품점·카라반 판매/렌탈업체·캠핑카 딜러,
