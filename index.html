@@ -1791,7 +1791,7 @@ function disableButton(btnRow, role, label) {
 
 // '확인 중' 상태였던 버튼에 검증 결과를 반영한다. 찾았으면 직접 링크로,
 // 없는 것이 확인되면 비활성화로 바꾼다. 애매/실패한 경우는 그대로 두고
-// 호출부의 fallbackToSearch()가 최종적으로 구글 검색 링크로 대체한다.
+// 호출부의 fallbackToSearch()가, 그래도 확인 안 된 애매한 경우는 최종적으로 비활성 표시로 정리한다.
 function resolvePendingButton(btnRow, role, directUrl, confirmedAbsent, foundLabel, notFoundLabel) {
     const a = btnRow.querySelector(`[data-role="${role}"]`);
     if (!a) return;
@@ -1807,18 +1807,14 @@ function resolvePendingButton(btnRow, role, directUrl, confirmedAbsent, foundLab
     }
 }
 
-// 검증이 실패했거나 결과가 애매해 여전히 '확인 중' 상태로 남은 버튼은,
-// 사용자가 최소한 수동으로라도 찾아볼 수 있도록 구글 사이트 검색 링크로 대체한다.
-function fallbackToSearch(btnRow, role, label, name) {
+// 검증이 실패했거나 결과가 애매해 여전히 '확인 중' 상태로 남은 버튼은, 구글 검색으로
+// 대체하면 이름만 비슷한 다른 캠핑장으로 잘못 안내할 위험이 있다(예: '두리캠핑장' 검색이
+// 전혀 다른 지역의 '원주두리 2캠핑장' 등을 보여줌). 그래서 링크로 연결하는 대신,
+// '없는 캠핑장'과 같은 회색 비활성 상태로 정직하게 "못 찾았다"고만 표시한다.
+function fallbackToSearch(btnRow, role) {
     const a = btnRow.querySelector(`[data-role="${role}"]`);
     if (!a || a.dataset.pending !== '1') return;
-    const site = role === 'camfit' ? 'camfit.co.kr' : 'thankqcamping.com';
-    a.href = `https://www.google.com/search?q=${encodeURIComponent('site:' + site + ' ' + name)}`;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.innerText = label;
-    a.className = 'reserve-btn secondary';
-    delete a.dataset.pending;
+    disableButton(btnRow, role, '정확한 링크를 못 찾았어요');
 }
 
 async function upgradeReservationButtons(name, btnRow, officialUrl, region) {
@@ -1853,10 +1849,8 @@ async function upgradeReservationButtons(name, btnRow, officialUrl, region) {
         console.error('예약페이지 확인 실패:', err);
     } finally {
         if (myGen === sheetGeneration) {
-            // 자동으로 직접 링크를 못 찾은 경우, 실제로는 구글 검색으로 넘어가므로
-            // 버튼 문구도 '캠핏에서 찾기'처럼 직접 링크인 것처럼 보이지 않게 정직하게 표기한다.
-            fallbackToSearch(btnRow, 'camfit', '구글에서 캠핏 검색', name);
-            fallbackToSearch(btnRow, 'thankyoucamping', '구글에서 땡큐캠핑 검색', name);
+            fallbackToSearch(btnRow, 'camfit');
+            fallbackToSearch(btnRow, 'thankyoucamping');
         }
     }
 }
