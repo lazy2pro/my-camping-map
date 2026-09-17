@@ -93,7 +93,9 @@ export default async function handler(req, res) {
     if (!Array.isArray(items)) items = [items];
 
     const CORP_PATTERN = /(주식회사|㈜|\(주\))/;
+    const NON_CAMPSITE_FACILITY_PATTERN = /(사무실|사무소|관리사무소|본사|지사|영업소|예약센터|고객센터|콜센터|여행사|관광안내소|안내센터|매표소|입구|주차장|정문|후문|식당|음식점|레스토랑|카페|베이커리|주점|포장마차|휴게소|매점)/;
     const isLikelyNotACampsite = (camp) => {
+      if (NON_CAMPSITE_FACILITY_PATTERN.test(camp.name || '')) return true;
       const isCorpName = CORP_PATTERN.test(camp.name || '');
       const hasNoContactInfo = !camp.tel && !camp.homepage && !camp.resveUrl && !camp.image;
       return isCorpName && hasNoContactInfo;

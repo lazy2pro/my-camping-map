@@ -84,11 +84,12 @@ export default async function handler(req, res) {
     let items = (body.items && body.items.item) || [];
     if (!Array.isArray(items)) items = [items]; // 결과가 1건이면 배열이 아니라 객체로 옴
 
-    // 고캠핑 API 원본 데이터에 실제 캠핑장이 아닌 항목(여행사 법인 등)이 섞여 있는 경우가 있음.
-    // "법인명 패턴(주식회사/㈜)" + "연락처 정보가 전부 비어있음" 두 조건을 동시에 만족하는 경우만
-    // 걸러냄 (진짜 캠핑장인데 법인명이 특이한 경우까지 잘못 거르지 않도록 보수적으로 적용)
+    // 고캠핑 원본에도 운영 사무실·식당·안내소처럼 숙박 사이트가 아닌 부속 장소가
+    // 섞일 수 있다. 이름에 시설 용도가 명확히 드러나는 경우에는 지도에서 제외한다.
     const CORP_PATTERN = /(주식회사|㈜|\(주\))/;
+    const NON_CAMPSITE_FACILITY_PATTERN = /(사무실|사무소|관리사무소|본사|지사|영업소|예약센터|고객센터|콜센터|여행사|관광안내소|안내센터|매표소|입구|주차장|정문|후문|식당|음식점|레스토랑|카페|베이커리|주점|포장마차|휴게소|매점)/;
     const isLikelyNotACampsite = (camp) => {
+      if (NON_CAMPSITE_FACILITY_PATTERN.test(camp.name || '')) return true;
       const isCorpName = CORP_PATTERN.test(camp.name || '');
       // trim/정제까지 끝난 값 기준으로 판단 (원본 필드에 공백만 있는 경우 등의 오탐 방지)
       const hasNoContactInfo = !camp.tel && !camp.homepage && !camp.resveUrl && !camp.image;

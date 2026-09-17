@@ -47,8 +47,6 @@ export default async function handler(req, res) {
       }
       return stripped;
     };
-    const skipCampFilter = req.query.raw === '1';
-
     // '캠핑'이라는 단어만 보고 거르면, 캠핑용품점·카라반 판매/렌탈업체·캠핑카 딜러,
     // 협회/단체 사무실, 캠핑장 안의 부속시설(예: 'OO캠핑장족구장')처럼 실제 야영지가
     // 아닌 곳까지 걸린다. 그래서 실제 야영지 카테고리 표현만 허용하고,
@@ -81,7 +79,6 @@ export default async function handler(req, res) {
 
     const items = (data.items || [])
       .filter((it) => {
-        if (skipCampFilter) return true;
         const category = strip(it.category);
         const title = strip(it.title);
         const address = strip(it.roadAddress) || strip(it.address);

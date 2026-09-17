@@ -32,6 +32,13 @@
         }
         .search-btn:active { opacity: 0.85; }
         .search-btn:disabled { background: #adb5bd; }
+        .glamping-toggle {
+            border: 1px solid #ced4da; background: #f1f3f5; color: #6c757d;
+            padding: 0 10px; border-radius: 8px; font-weight: 700; font-size: 12px;
+            cursor: pointer; white-space: nowrap; transition: background 0.15s, color 0.15s, border-color 0.15s;
+        }
+        .glamping-toggle.active { background: #7048e8; color: white; border-color: #7048e8; }
+        .glamping-toggle:active { opacity: 0.8; }
 
         #search-results {
             background: white; border-radius: 12px; max-height: 250px;
@@ -446,6 +453,7 @@
 
 <div class="search-wrapper">
     <div class="search-container">
+        <button class="glamping-toggle active" id="glamping-toggle" type="button" aria-pressed="true" onclick="toggleGlamping()">글램핑</button>
         <input type="text" id="search-keyword" class="search-input" placeholder="캠핑장 이름 검색 (예: 계방산)" onkeyup="if(event.keyCode===13) searchCamping();">
         <button class="search-btn" id="search-btn" onclick="searchCamping()">검색</button>
     </div>
@@ -626,6 +634,32 @@ const NON_RESERVATION_HOSTS = [
 // 네이버 지역검색 결과 중 캠핑장 본체가 아니라 '입구/주차장/매표소' 같은
 // 부속 지점(랜드마크)만 별도로 잡히는 경우가 있어, 이런 이름은 보완 검색 결과에서 제외한다.
 const NON_CAMP_NAME_SUFFIX = /(입구|주차장|매표소|정문|후문|관리사무소|사무실|안내소)$/;
+
+// 글램핑 전용 시설은 토글을 끈 경우에만 숨긴다. 이름에 글램핑이 있어도
+// 캠핑장·야영장·카라반을 함께 운영한다고 표시된 곳은 계속 보여준다.
+let includeGlamping = true;
+function isGlampingOnly(camp) {
+    const text = `${camp.name || ''} ${camp.category || ''}`;
+    if (!/글램핑/.test(text)) return false;
+    const withoutGlamping = text.replace(/글램핑(?:장|존)?/g, '');
+    return !/(캠핑|야영|카라반)/.test(withoutGlamping);
+}
+
+function filterGlamping(camps) {
+    return includeGlamping ? camps : camps.filter((camp) => !isGlampingOnly(camp));
+}
+
+function toggleGlamping() {
+    includeGlamping = !includeGlamping;
+    const toggle = document.getElementById('glamping-toggle');
+    toggle.classList.toggle('active', includeGlamping);
+    toggle.setAttribute('aria-pressed', String(includeGlamping));
+    toggle.title = includeGlamping ? '글램핑 포함 검색 중' : '글램핑 전용 시설 제외 중';
+
+    const keyword = document.getElementById('search-keyword').value.trim();
+    if (keyword) searchCamping();
+    else fetchCampsInView();
+}
 
 // 고캠핑 등록 캠핑장이 공백/번호 표기 차이로 같은 곳이 중복 등록된 경우
 // (예: '선택적고립캠핑장' / '선택적 고립 캠핑장 1') 이름을 비교하기 위한 정규화.
@@ -1151,6 +1185,7 @@ async function fetchCampsInView() {
             camps = data.camps;
         }
 
+        camps = filterGlamping(camps);
         renderCamps(camps);
 
         if (needsGrid) {
@@ -1167,8 +1202,9 @@ async function fetchCampsInView() {
         }
 
         const extra = await fetchNaverSupplementaryCamps(camps, lat, lng, signal);
-        if (extra.length) {
-            addMarkers(extra, ORANGE_ICON);
+        const visibleExtra = filterGlamping(extra);
+        if (visibleExtra.length) {
+            addMarkers(visibleExtra, ORANGE_ICON);
         }
     } catch (err) {
         if (err.name === 'AbortError') return;
@@ -1344,11 +1380,11 @@ function renderCamps(camps) {
         marker.setMap(null);
     });
     currentMarkers = [];
-    addMarkers(camps, GREEN_ICON);
+    addMarkers(filterGlamping(camps), GREEN_ICON);
 }
 
 function addMarkers(items, icon) {
-    items.forEach((item) => {
+    filterGlamping(items).forEach((item) => {
         const position = new naver.maps.LatLng(item.lat, item.lng);
         const marker = new naver.maps.Marker({ position, map, icon });
 
@@ -1493,10 +1529,11 @@ async function searchCampsByName(keyword) {
         }
     }
 
-    return results;
+    return filterGlamping(results);
 }
 
 function showCampNameResults(camps) {
+    camps = filterGlamping(camps);
     const officialCamps = camps.filter((c) => c.source !== 'naver');
     const supplementaryCamps = camps.filter((c) => c.source === 'naver');
     renderCamps(officialCamps);
