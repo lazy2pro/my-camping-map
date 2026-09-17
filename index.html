@@ -635,14 +635,15 @@ const NON_RESERVATION_HOSTS = [
 // 부속 지점(랜드마크)만 별도로 잡히는 경우가 있어, 이런 이름은 보완 검색 결과에서 제외한다.
 const NON_CAMP_NAME_SUFFIX = /(입구|주차장|매표소|정문|후문|관리사무소|사무실|안내소)$/;
 
-// 글램핑 전용 시설은 토글을 끈 경우에만 숨긴다. 이름에 글램핑이 있어도
-// 캠핑장·야영장·카라반을 함께 운영한다고 표시된 곳은 계속 보여준다.
+// 글램핑 전용 시설은 토글을 끈 경우에만 숨긴다. 이름으로 추측하지 않고,
+// 정보 더보기의 시설 유형(고캠핑 induty)에 글램핑 외 오토캠핑·야영장·카라반이
+// 함께 있는지로 판정한다. 예: "글램핑, 자동차야영장"은 계속 표시한다.
 let includeGlamping = true;
 function isGlampingOnly(camp) {
-    const text = `${camp.name || ''} ${camp.category || ''}`;
-    if (!/글램핑/.test(text)) return false;
-    const withoutGlamping = text.replace(/글램핑(?:장|존)?/g, '');
-    return !/(캠핑|야영|카라반)/.test(withoutGlamping);
+    const facilityTypes = camp.category || '';
+    if (!/글램핑/.test(facilityTypes)) return false;
+    const withoutGlamping = facilityTypes.replace(/글램핑(?:장|존)?/g, '');
+    return !/(오토\s*캠핑|자동차\s*야영장|일반\s*야영장|야영장|카라반|캠핑)/.test(withoutGlamping);
 }
 
 function filterGlamping(camps) {
