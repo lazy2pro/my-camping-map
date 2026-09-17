@@ -115,6 +115,12 @@ export default async function handler(req, res) {
         resveUrl: (it.resveUrl || '').replace(/<[^>]*>/g, '').trim(),
         resveCl: it.resveCl || '',
         image: (it.firstImageUrl || '').trim(),
+        glampSiteCount: parseInt(it.glampSiteCo, 10) || 0,
+        nonGlampingSiteCount:
+          (parseInt(it.gnrlSiteCo, 10) || 0) +
+          (parseInt(it.autoSiteCo, 10) || 0) +
+          (parseInt(it.caravSiteCo, 10) || 0) +
+          (parseInt(it.indvdlCaravSiteCo, 10) || 0),
       }))
       .filter((camp) => !isLikelyNotACampsite(camp));
 

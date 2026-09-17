@@ -110,6 +110,14 @@ export default async function handler(req, res) {
         resveUrl: (it.resveUrl || '').replace(/<[^>]*>/g, '').trim(), // 예약 페이지 (캠핏/땡큐캠핑 등으로 연결되는 경우 많음)
         resveCl: it.resveCl || '', // 예약 구분 (예: 온라인실시간예약)
         image: (it.firstImageUrl || '').trim(),
+        // 업종(induty)은 "일반야영장"으로만 표시되더라도 실제로는 글램핑만
+        // 운영하는 곳이 있다. 사이트 수로 글램핑 전용 여부를 정확히 판별한다.
+        glampSiteCount: parseInt(it.glampSiteCo, 10) || 0,
+        nonGlampingSiteCount:
+          (parseInt(it.gnrlSiteCo, 10) || 0) +
+          (parseInt(it.autoSiteCo, 10) || 0) +
+          (parseInt(it.caravSiteCo, 10) || 0) +
+          (parseInt(it.indvdlCaravSiteCo, 10) || 0),
       }))
       .filter((camp) => !isLikelyNotACampsite(camp));
 
