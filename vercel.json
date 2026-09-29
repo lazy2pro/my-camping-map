@@ -3,6 +3,7 @@
   "regions": ["icn1"],
   "functions": {
     "api/camping.js": { "maxDuration": 10 },
-    "api/reservation-link.js": { "maxDuration": 15 }
+    "api/reservation-link.js": { "maxDuration": 15 },
+    "api/holidays.js": { "maxDuration": 10 }
   }
 }
