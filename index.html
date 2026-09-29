@@ -206,7 +206,9 @@
         .item-checkbox { width: 20px; height: 20px; flex-shrink: 0; accent-color: #2b8a3e; }
         .item-name { flex: 1; font-size: 14px; color: #333; word-break: break-word; }
         .item-name.checked { text-decoration: line-through; color: #adb5bd; }
-        .item-del-btn { background: none; border: none; color: #e03131; font-size: 18px; cursor: pointer; padding: 4px; flex-shrink: 0; }
+        .item-del-btn { background: none; border: none; color: #e03131; font-size: 18px; cursor: pointer; padding: 4px; flex-shrink: 0; border-radius: 8px; line-height: 1; transition: background 0.12s, transform 0.08s; }
+        .item-del-btn:hover { background: #ffe3e3; }
+        .item-del-btn:active { transform: scale(0.88); background: #ffc9c9; }
         .add-row { display: flex; gap: 8px; margin-top: 10px; }
         .add-input {
             flex: 1; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px 12px;
@@ -1396,8 +1398,10 @@ function renderCamps(camps) {
     addMarkers(filterGlamping(camps), GREEN_ICON);
 }
 
+// items는 이미 filterGlamping을 거친 목록을 받는다 (호출부에서 필터링). 여기서 다시 필터링하지 않아
+// 지도 이동마다 같은 필터를 두 번 도는 낭비를 없앤다.
 function addMarkers(items, icon) {
-    filterGlamping(items).forEach((item) => {
+    items.forEach((item) => {
         const position = new naver.maps.LatLng(item.lat, item.lng);
         const marker = new naver.maps.Marker({ position, map, icon });
 
@@ -1673,7 +1677,7 @@ async function fetchCampsAt(lat, lng, radius) {
         const data = await fetchCampsData(lat, lng, radius);
         renderCamps(data.camps);
         updateSearchRadiusCircle(lat, lng, radius);
-        const extra = await fetchNaverSupplementaryCamps(data.camps, lat, lng);
+        const extra = filterGlamping(await fetchNaverSupplementaryCamps(data.camps, lat, lng));
         if (extra.length) {
             addMarkers(extra, ORANGE_ICON);
         }
@@ -2518,6 +2522,8 @@ function toggleFoodItem(dateStr, mealKey, id) {
 function deleteFoodItem(dateStr, mealKey, id) {
     if (!activeFoodTripId) return;
     const entry = ensureDayMealEntry(activeFoodTripId, dateStr, mealKey, true);
+    const item = entry.items.find((i) => i.id === id);
+    if (item && item.name && !confirm(`'${item.name}'을(를) 삭제할까요?`)) return;
     entry.items = entry.items.filter((i) => i.id !== id);
     saveFoodData(foodData);
     renderFoodDaysList();
@@ -3037,8 +3043,20 @@ function addHistoryRecord() {
 }
 
 function deleteRecord(type, id) {
+    // 저장된 캠핑 기록/일정은 실수로 지우면 되돌릴 수 없으므로, 삭제 전 반드시 확인한다.
+    const rec = (recordsData[type] || []).find((r) => r.id === id);
+    const label = rec && rec.camp ? `'${rec.camp}'` : (type === 'upcoming' ? '이 예정 일정' : '이 캠핑 기록');
+    const hasFoodPlan = type === 'upcoming' && foodData && foodData.trips && foodData.trips[id];
+    let msg = `${label}을(를) 삭제할까요?\n삭제하면 되돌릴 수 없어요.`;
+    if (hasFoodPlan) msg += `\n연결된 음식 계획도 함께 삭제됩니다.`;
+    if (!confirm(msg)) return;
     recordsData[type] = recordsData[type].filter((r) => r.id !== id);
     saveRecordsData(recordsData);
+    // 예정 일정을 지우면 그 일정에 연결된 음식 계획도 함께 정리한다.
+    if (type === 'upcoming' && foodData && foodData.trips && foodData.trips[id]) {
+        delete foodData.trips[id];
+        saveFoodData(foodData);
+    }
     if (type === 'upcoming' && activeFoodTripId === id) {
         activeFoodTripId = null;
     }
