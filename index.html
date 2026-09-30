@@ -84,20 +84,21 @@
 
         #legend {
             position: fixed; left: 84px; bottom: 30px; z-index: 90;
-            background: white; border-radius: 10px; padding: 8px 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-size: 11px; color: #333;
-            display: flex; flex-direction: column; gap: 4px;
+            background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            border-radius: var(--radius-sm); padding: 9px 13px;
+            box-shadow: var(--shadow); border: 1px solid var(--line); font-size: 11px; color: var(--ink-2);
+            display: flex; flex-direction: column; gap: 5px;
         }
         #legend .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
 
         #fuel-price-list {
             position: fixed; top: 76px; right: 16px; bottom: 30px; z-index: 95;
             width: 290px; max-width: 60vw;
-            background: rgba(255,255,255,0.8);
-            backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-            border-radius: 12px;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-            overflow-y: auto; display: none; padding: 0; margin: 0; list-style: none;
+            background: var(--glass);
+            backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg); border: 1px solid rgba(255,255,255,.6);
+            overflow-y: auto; display: none; padding: 4px; margin: 0; list-style: none;
         }
         #fuel-price-list.active { display: block; }
         #fuel-price-list li {
@@ -110,14 +111,14 @@
         #fuel-price-list li.selected { background: rgba(231,245,255,0.85); }
         .fuel-list-info { flex: 1 1 auto; min-width: 0; }
         .fuel-list-top { display: flex; align-items: baseline; gap: 6px; }
-        .fuel-list-rank { color: #1c7ed6; font-weight: bold; font-size: 12px; flex-shrink: 0; }
-        .fuel-list-price { font-weight: bold; font-size: 16px; color: #1c7ed6; }
-        .fuel-list-name { font-size: 12.5px; color: #333; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .fuel-list-sub { font-size: 11px; color: #888; margin-top: 1px; }
+        .fuel-list-rank { color: var(--sky); font-weight: 800; font-size: 12px; flex-shrink: 0; }
+        .fuel-list-price { font-weight: 800; font-size: 16px; color: var(--sky); }
+        .fuel-list-name { font-size: 12.5px; color: var(--ink); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .fuel-list-sub { font-size: 11px; color: var(--ink-3); margin-top: 1px; }
         .fuel-list-tmap-btn {
             flex: 0 0 30%; text-align: center; text-decoration: none;
-            background: #1c7ed6; color: white; font-size: 12px; font-weight: bold;
-            padding: 10px 4px; border-radius: 8px; white-space: nowrap;
+            background: var(--sky); color: white; font-size: 12px; font-weight: 700;
+            padding: 10px 4px; border-radius: var(--radius-sm); white-space: nowrap;
         }
         .fuel-list-tmap-btn:active { opacity: 0.8; }
 
@@ -213,26 +214,36 @@
         /* ---- 지도 위에 뜨는 반투명 패널(음식/기록/장비) ---- */
         .app-view {
             position: fixed; top: 76px; right: 16px; bottom: 30px; z-index: 250;
-            width: 360px; max-width: 92vw;
-            background: rgba(255,255,255,0.88);
-            backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+            width: 372px; max-width: 92vw;
+            background: var(--glass);
+            backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg); border: 1px solid rgba(255,255,255,.6);
             overflow-y: auto; display: none;
         }
-        .app-view.active { display: block; }
+        .app-view.active { display: block; animation: view-in .24s cubic-bezier(.2,.8,.2,1); }
+        @keyframes view-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         /* 좁은 화면(모바일)에서는 폭 고정 때문에 패널 왼쪽이 좌측 사이드바(64px) 밑에 가려지므로,
            사이드바 오른쪽부터 시작하도록 좌우 폭을 새로 잡아준다. 세부 모바일 축소 규칙은
            캐스케이드 순서상 이후에 정의되는 기본 규칙에 덮어써지지 않도록 스타일시트 맨 끝에 모아둔다. */
         .view-header {
-            position: sticky; top: 0; background: rgba(255,255,255,0.7);
-            backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-            padding: 14px 16px 10px; z-index: 2;
+            position: sticky; top: 0; background: rgba(255,255,255,0.78);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            padding: 15px 16px 12px; z-index: 2; border-bottom: 1px solid var(--line);
             display: flex; justify-content: space-between; align-items: center;
         }
-        .view-header h2 { margin: 0; font-size: 16px; color: #111; }
-        .view-close-btn { background: none; border: none; font-size: 20px; color: #999; cursor: pointer; padding: 0; line-height: 1; }
-        .view-body { padding: 4px 16px 20px; }
+        .view-header h2 { margin: 0; font-size: 17px; font-weight: 800; color: var(--ink); letter-spacing: -0.01em; }
+        .view-close-btn {
+            background: var(--surface-2); border: none; width: 32px; height: 32px; border-radius: 50%;
+            font-size: 17px; color: var(--ink-3); cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0;
+            transition: background .15s, color .15s;
+        }
+        .view-close-btn:hover { background: var(--line); color: var(--ink-2); }
+        .view-close-btn:active { transform: scale(0.92); }
+        .view-body { padding: 12px 16px 20px; }
+        /* 패널 안의 소제목/구분선 통일 (인라인 스타일이 남아 있어도 명시도로 덮어씀) */
+        .view-body h3 { font-size: 14.5px !important; font-weight: 800 !important; color: var(--ink) !important; letter-spacing: -0.01em; }
+        .view-body > div[style*="border-top"] { border-top: 1px solid var(--line) !important; }
 
         .tab-row { display: flex; gap: 6px; margin-bottom: 16px; background: var(--surface-2); padding: 4px; border-radius: var(--radius-sm); }
         .tab-btn {
@@ -291,13 +302,14 @@
         .autocomplete-wrap { position: relative; }
         .autocomplete-list {
             position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20;
-            background: white; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+            background: var(--surface); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg);
+            border: 1px solid var(--line);
             max-height: 220px; overflow-y: auto; list-style: none; margin: 0; padding: 4px; display: none;
         }
-        .autocomplete-list li { padding: 8px 10px; border-radius: 8px; cursor: pointer; }
-        .autocomplete-list li:hover, .autocomplete-list li:active { background: #f1f3f5; }
-        .suggest-name { font-size: 13.5px; font-weight: 600; color: #111; }
-        .suggest-addr { font-size: 11.5px; color: #777; margin-top: 1px; }
+        .autocomplete-list li { padding: 9px 11px; border-radius: 9px; cursor: pointer; transition: background .12s; }
+        .autocomplete-list li:hover, .autocomplete-list li:active { background: var(--surface-2); }
+        .suggest-name { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+        .suggest-addr { font-size: 11.5px; color: var(--ink-3); margin-top: 1px; }
 
         .restaurant-card {
             background: var(--surface); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 8px;
