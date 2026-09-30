@@ -152,14 +152,23 @@
         .gps-btn.shifted { bottom: 260px; }
         .gps-icon { width: 22px; height: 22px; fill: var(--forest); }
 
+        #sheet-backdrop {
+            position: fixed; inset: 0; z-index: 999; background: rgba(20,32,26,.28);
+            opacity: 0; pointer-events: none; transition: opacity 0.28s ease;
+        }
+        #sheet-backdrop.active { opacity: 1; pointer-events: auto; }
         #bottom-sheet {
-            position: fixed; bottom: -400px; left: 0; right: 0;
-            background: var(--surface); padding: 22px 20px calc(22px + env(safe-area-inset-bottom)); border-radius: 24px 24px 0 0;
+            position: fixed; bottom: -460px; left: 0; right: 0;
+            background: var(--surface); padding: 8px 20px calc(24px + env(safe-area-inset-bottom)); border-radius: 24px 24px 0 0;
             box-shadow: 0 -8px 34px rgba(20,32,26,.18); z-index: 1000;
             transition: bottom 0.32s cubic-bezier(.2,.8,.2,1);
+            touch-action: none;
         }
-        #bottom-sheet::before { content:""; display:block; width:40px; height:4px; border-radius:99px; background:var(--line); margin:-8px auto 14px; }
+        /* 손으로 끌어내려 닫을 수 있는 손잡이 (탭 영역을 넉넉히) */
+        .sheet-grab { padding: 8px 0 12px; margin: 0 auto 2px; width: 80px; cursor: grab; display: flex; justify-content: center; }
+        .sheet-grab::before { content:""; display:block; width:44px; height:5px; border-radius:99px; background:var(--line); }
         #bottom-sheet.active { bottom: 0; }
+        #bottom-sheet.dragging { transition: none; }
         .sheet-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
         .camp-title { margin: 0; font-size: 19px; font-weight: 800; color: var(--ink); letter-spacing: -0.01em; }
         .camp-category { font-size: 12px; color: var(--forest); font-weight: 700; margin-bottom: 4px; }
@@ -518,7 +527,9 @@
     </svg>
 </button>
 
+<div id="sheet-backdrop"></div>
 <div id="bottom-sheet">
+    <div class="sheet-grab" aria-hidden="true"></div>
     <div class="sheet-header">
         <div>
             <div id="camp-category" class="camp-category"></div>
@@ -997,7 +1008,9 @@ function openFuelSheet(station) {
     // 뒤늦게 반영되지 않도록 세대를 올려 무효화한다.
     sheetGeneration++;
 
+    sheet.style.transform = '';
     sheet.classList.add('active');
+    document.getElementById('sheet-backdrop').classList.add('active');
     gpsBtn.classList.add('shifted');
 }
 
@@ -1971,9 +1984,55 @@ async function upgradeReservationButtons(name, btnRow, officialUrl, region) {
 }
 
 function closeSheet() {
-    document.getElementById('bottom-sheet').classList.remove('active');
+    const sheet = document.getElementById('bottom-sheet');
+    sheet.classList.remove('active');
+    sheet.style.transform = '';
+    document.getElementById('sheet-backdrop').classList.remove('active');
     document.getElementById('gps-btn').classList.remove('shifted');
 }
+
+// 바텀 시트: 배경 탭 / 아래로 스와이프로 닫기 (닫기 버튼이 작아 잘 안 눌리는 문제 해결)
+(function setupSheetDismiss(){
+    const attach = () => {
+        const sheet = document.getElementById('bottom-sheet');
+        const backdrop = document.getElementById('sheet-backdrop');
+        const grab = sheet && sheet.querySelector('.sheet-grab');
+        if(!sheet || !backdrop) { return; }
+        backdrop.addEventListener('click', closeSheet);
+
+        let startY = 0, dy = 0, dragging = false;
+        const onDown = (e) => {
+            startY = (e.touches ? e.touches[0].clientY : e.clientY);
+            dy = 0; dragging = true;
+            sheet.classList.add('dragging');
+        };
+        const onMove = (e) => {
+            if(!dragging) return;
+            const y = (e.touches ? e.touches[0].clientY : e.clientY);
+            dy = Math.max(0, y - startY); // 아래로만
+            sheet.style.transform = 'translateY(' + dy + 'px)';
+        };
+        const onUp = () => {
+            if(!dragging) return;
+            dragging = false;
+            sheet.classList.remove('dragging');
+            if(dy > 90){ closeSheet(); }
+            else { sheet.style.transform = ''; }
+        };
+        // 손잡이 영역과 헤더에서 끌어내리기 시작 가능
+        [grab, sheet.querySelector('.sheet-header')].forEach(el => {
+            if(!el) return;
+            el.addEventListener('touchstart', onDown, { passive: true });
+            el.addEventListener('mousedown', onDown);
+        });
+        window.addEventListener('touchmove', onMove, { passive: true });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchend', onUp);
+        window.addEventListener('mouseup', onUp);
+    };
+    if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach);
+    else attach();
+})();
 
 // ============================================================
 // ---- 공휴일 연동 커스텀 날짜 선택기 ----
