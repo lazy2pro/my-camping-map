@@ -9,51 +9,78 @@
     <!-- 네이버지도 SDK -->
     <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=yjuis1thok&submodules=geocoder"></script>
     <style>
+        /* ===== 디자인 토큰 (오리지널 디자인 시스템: 숲/모래 톤) ===== */
+        :root {
+            --forest: #1f7a4d;          /* 메인 브랜드(딥 포레스트 그린) */
+            --forest-deep: #175f3c;
+            --forest-soft: #e7f6ee;
+            --sand: #e8a13a;            /* 따뜻한 모래/모닥불 액센트 */
+            --sky: #2f7fd6;             /* 정보/유가 등 보조 */
+            --sky-soft: #e8f1fc;
+            --danger: #e5484d;
+            --ink: #14201a;             /* 진한 텍스트 */
+            --ink-2: #4a5852;           /* 보조 텍스트 */
+            --ink-3: #8a968f;           /* 흐린 텍스트 */
+            --line: #e9ede9;            /* 경계선 */
+            --surface: #ffffff;         /* 카드/패널 */
+            --surface-2: #f4f7f4;       /* 살짝 눌린 배경 */
+            --radius: 16px;
+            --radius-sm: 11px;
+            --radius-pill: 999px;
+            --shadow-sm: 0 1px 3px rgba(20,32,26,.06), 0 1px 2px rgba(20,32,26,.04);
+            --shadow: 0 6px 20px rgba(20,32,26,.10);
+            --shadow-lg: 0 12px 34px rgba(20,32,26,.16);
+            --glass: rgba(255,255,255,.82);
+        }
         * { box-sizing: border-box; }
-        body, html { margin:0; padding:0; height:100%; width:100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        #map { width:100%; height:100%; background: #e9ecef; }
+        body, html { margin:0; padding:0; height:100%; width:100%; color: var(--ink);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+            -webkit-font-smoothing: antialiased; }
+        #map { width:100%; height:100%; background: #e9ece7; }
 
         .search-wrapper {
             position: fixed; top: 16px; left: 84px; right: 16px; z-index: 100;
             display: flex; flex-direction: column; gap: 8px;
         }
         .search-container {
-            display: flex; gap: 8px; background: white; padding: 6px;
-            border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: flex; gap: 6px; background: var(--surface); padding: 6px;
+            border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--line);
         }
         .search-input {
-            flex: 1; border: none; outline: none; padding: 10px 12px;
-            font-size: 15px; border-radius: 8px; background: #f8f9fa;
+            flex: 1; border: none; outline: none; padding: 11px 14px;
+            font-size: 15px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--ink);
         }
+        .search-input::placeholder { color: var(--ink-3); }
         .search-btn {
-            background: #2b8a3e; color: white; border: none;
-            padding: 0 16px; border-radius: 8px; font-weight: bold;
-            font-size: 14px; cursor: pointer; white-space: nowrap;
+            background: var(--forest); color: white; border: none;
+            padding: 0 18px; border-radius: var(--radius-sm); font-weight: 700;
+            font-size: 14px; cursor: pointer; white-space: nowrap; transition: background .15s, transform .08s;
         }
-        .search-btn:active { opacity: 0.85; }
-        .search-btn:disabled { background: #adb5bd; }
+        .search-btn:hover { background: var(--forest-deep); }
+        .search-btn:active { transform: scale(0.97); }
+        .search-btn:disabled { background: #b5c2ba; }
         .glamping-toggle {
-            border: 1px solid #ced4da; background: #f1f3f5; color: #6c757d;
-            padding: 0 10px; border-radius: 8px; font-weight: 700; font-size: 12px;
+            border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2);
+            padding: 0 12px; border-radius: var(--radius-sm); font-weight: 700; font-size: 12px;
             cursor: pointer; white-space: nowrap; transition: background 0.15s, color 0.15s, border-color 0.15s;
         }
-        .glamping-toggle.active { background: #7048e8; color: white; border-color: #7048e8; }
-        .glamping-toggle:active { opacity: 0.8; }
+        .glamping-toggle.active { background: var(--sand); color: white; border-color: var(--sand); }
+        .glamping-toggle:active { opacity: 0.85; }
 
         #search-results {
-            background: white; border-radius: 12px; max-height: 250px;
-            overflow-y: auto; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-            display: none; padding: 0; margin: 0; list-style: none;
+            background: var(--surface); border-radius: var(--radius); max-height: 260px;
+            overflow-y: auto; box-shadow: var(--shadow-lg); border: 1px solid var(--line);
+            display: none; padding: 4px; margin: 0; list-style: none;
         }
         #search-results li {
-            padding: 12px 16px; border-bottom: 1px solid #f1f3f5;
-            cursor: pointer; transition: background 0.15s;
+            padding: 11px 14px; border-radius: var(--radius-sm);
+            cursor: pointer; transition: background 0.12s;
         }
-        #search-results li:last-child { border-bottom: none; }
-        #search-results li:active { background: #e7f5ff; }
-        .result-title { font-weight: bold; font-size: 15px; color: #111; margin-bottom: 2px; }
-        .result-sub { font-size: 12px; color: #666; display: flex; gap: 8px; }
-        .result-category { color: #2b8a3e; font-weight: 600; }
+        #search-results li:hover { background: var(--surface-2); }
+        #search-results li:active { background: var(--forest-soft); }
+        .result-title { font-weight: 700; font-size: 15px; color: var(--ink); margin-bottom: 2px; }
+        .result-sub { font-size: 12px; color: var(--ink-2); display: flex; gap: 8px; }
+        .result-category { color: var(--forest); font-weight: 600; }
 
         #legend {
             position: fixed; left: 84px; bottom: 30px; z-index: 90;
@@ -114,58 +141,64 @@
 
         .gps-btn {
             position: fixed; right: 16px; bottom: 30px; z-index: 100;
-            width: 48px; height: 48px; border-radius: 50%;
-            background: white; border: none;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            width: 50px; height: 50px; border-radius: 50%;
+            background: var(--surface); border: 1px solid var(--line);
+            box-shadow: var(--shadow);
             display: flex; justify-content: center; align-items: center;
-            cursor: pointer; transition: transform 0.1s, bottom 0.3s ease-in-out;
+            cursor: pointer; transition: transform 0.1s, bottom 0.3s ease-in-out, background .15s;
         }
-        .gps-btn:active { transform: scale(0.95); }
+        .gps-btn:hover { background: var(--surface-2); }
+        .gps-btn:active { transform: scale(0.93); }
         .gps-btn.shifted { bottom: 260px; }
-        .gps-icon { width: 22px; height: 22px; fill: #333; }
+        .gps-icon { width: 22px; height: 22px; fill: var(--forest); }
 
         #bottom-sheet {
             position: fixed; bottom: -400px; left: 0; right: 0;
-            background: white; padding: 20px; border-radius: 20px 20px 0 0;
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.15); z-index: 1000;
-            transition: bottom 0.3s ease-in-out;
+            background: var(--surface); padding: 22px 20px calc(22px + env(safe-area-inset-bottom)); border-radius: 24px 24px 0 0;
+            box-shadow: 0 -8px 34px rgba(20,32,26,.18); z-index: 1000;
+            transition: bottom 0.32s cubic-bezier(.2,.8,.2,1);
         }
+        #bottom-sheet::before { content:""; display:block; width:40px; height:4px; border-radius:99px; background:var(--line); margin:-8px auto 14px; }
         #bottom-sheet.active { bottom: 0; }
         .sheet-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-        .camp-title { margin: 0; font-size: 18px; font-weight: bold; color: #111; }
-        .camp-category { font-size: 12px; color: #2b8a3e; font-weight: 600; margin-bottom: 4px; }
-        .camp-address { margin: 0 0 8px 0; color: #666; font-size: 13px; line-height: 1.4; }
-        .fuel-price { font-size: 22px; font-weight: bold; color: #1c7ed6; }
-        .camp-tel { margin: 0 0 16px 0; color: #666; font-size: 13px; }
-        .close-btn { background: none; border: none; font-size: 20px; color: #aaa; cursor: pointer; padding: 0; }
+        .camp-title { margin: 0; font-size: 19px; font-weight: 800; color: var(--ink); letter-spacing: -0.01em; }
+        .camp-category { font-size: 12px; color: var(--forest); font-weight: 700; margin-bottom: 4px; }
+        .camp-address { margin: 0 0 8px 0; color: var(--ink-2); font-size: 13px; line-height: 1.45; }
+        .fuel-price { font-size: 23px; font-weight: 800; color: var(--sky); }
+        .camp-tel { margin: 0 0 16px 0; color: var(--ink-2); font-size: 13px; }
+        .close-btn { background: var(--surface-2); border: none; width: 30px; height: 30px; border-radius: 50%; font-size: 17px; color: var(--ink-3); cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0; }
+        .close-btn:hover { background: var(--line); color: var(--ink-2); }
 
         .btn-row { display: flex; flex-direction: column; gap: 8px; }
         .reserve-btn {
             display: flex; justify-content: center; align-items: center;
-            width: 100%; height: 48px; border-radius: 12px;
-            color: white; font-size: 15px; font-weight: bold;
-            text-decoration: none; border: none; transition: opacity 0.2s;
+            width: 100%; height: 50px; border-radius: var(--radius-sm);
+            color: white; font-size: 15px; font-weight: 700;
+            text-decoration: none; border: none; transition: filter 0.15s, transform .08s;
         }
-        .reserve-btn:active { opacity: 0.8; }
-        .reserve-btn.primary { background: #2b8a3e; }
-        .reserve-btn.secondary { background: #495057; height: 42px; font-size: 14px; }
-        .reserve-btn.disabled { background: #dee2e6; color: #868e96; height: 42px; font-size: 14px; cursor: default; pointer-events: none; }
+        .reserve-btn:active { transform: scale(0.98); }
+        .reserve-btn.primary { background: var(--forest); }
+        .reserve-btn.primary:hover { filter: brightness(1.05); }
+        .reserve-btn.secondary { background: var(--ink-2); height: 44px; font-size: 14px; }
+        .reserve-btn.disabled { background: var(--surface-2); color: var(--ink-3); height: 44px; font-size: 14px; cursor: default; pointer-events: none; }
 
         /* ---- 좌측 사이드 메뉴 ---- */
         #sidebar {
             position: fixed; top: 0; left: 0; bottom: 0; width: 64px; z-index: 300;
-            background: white; box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            background: var(--surface); box-shadow: 1px 0 0 var(--line), 4px 0 18px rgba(20,32,26,.06);
             display: flex; flex-direction: column; align-items: center;
-            padding-top: 14px; gap: 4px;
+            padding-top: 14px; gap: 6px;
         }
         .sidebar-btn {
             width: 52px; height: 56px; border: none; background: none; cursor: pointer;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            gap: 4px; border-radius: 12px; color: #868e96; font-size: 10.5px; font-weight: 600;
+            gap: 4px; border-radius: 14px; color: var(--ink-3); font-size: 10.5px; font-weight: 600;
+            transition: background .15s, color .15s;
         }
         .sidebar-btn .sidebar-icon { font-size: 20px; line-height: 1; }
-        .sidebar-btn:active { opacity: 0.8; }
-        .sidebar-btn.active { background: #e7f5ff; color: #1c7ed6; }
+        .sidebar-btn:hover { background: var(--surface-2); color: var(--ink-2); }
+        .sidebar-btn:active { transform: scale(0.94); }
+        .sidebar-btn.active { background: var(--forest-soft); color: var(--forest); }
 
         /* ---- 지도 외 뷰(음식/기록/장비) 공통 ---- */
         /* ---- 지도 위에 뜨는 반투명 패널(음식/기록/장비) ---- */
@@ -192,55 +225,58 @@
         .view-close-btn { background: none; border: none; font-size: 20px; color: #999; cursor: pointer; padding: 0; line-height: 1; }
         .view-body { padding: 4px 16px 20px; }
 
-        .tab-row { display: flex; gap: 8px; margin-bottom: 16px; }
+        .tab-row { display: flex; gap: 6px; margin-bottom: 16px; background: var(--surface-2); padding: 4px; border-radius: var(--radius-sm); }
         .tab-btn {
-            flex: 1; padding: 10px; border: none; border-radius: 10px; background: #f1f3f5;
-            color: #495057; font-weight: 600; font-size: 13px; cursor: pointer;
+            flex: 1; padding: 9px; border: none; border-radius: 9px; background: transparent;
+            color: var(--ink-2); font-weight: 700; font-size: 13px; cursor: pointer; transition: background .15s, color .15s;
         }
-        .tab-btn.active { background: #2b8a3e; color: white; }
+        .tab-btn.active { background: var(--surface); color: var(--forest); box-shadow: var(--shadow-sm); }
 
         .item-card {
-            background: white; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.08); display: flex; align-items: center; gap: 10px;
+            background: var(--surface); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 10px;
+            box-shadow: var(--shadow-sm); border: 1px solid var(--line); display: flex; align-items: center; gap: 10px;
         }
-        .item-checkbox { width: 20px; height: 20px; flex-shrink: 0; accent-color: #2b8a3e; }
-        .item-name { flex: 1; font-size: 14px; color: #333; word-break: break-word; }
-        .item-name.checked { text-decoration: line-through; color: #adb5bd; }
+        .item-checkbox { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--forest); }
+        .item-name { flex: 1; font-size: 14px; color: var(--ink); word-break: break-word; }
+        .item-name.checked { text-decoration: line-through; color: var(--ink-3); }
         .item-del-btn { background: none; border: none; color: #e03131; font-size: 18px; cursor: pointer; padding: 4px; flex-shrink: 0; border-radius: 8px; line-height: 1; transition: background 0.12s, transform 0.08s; }
         .item-del-btn:hover { background: #ffe3e3; }
         .item-del-btn:active { transform: scale(0.88); background: #ffc9c9; }
         .add-row { display: flex; gap: 8px; margin-top: 10px; }
         .add-input {
-            flex: 1; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px 12px;
-            font-size: 14px; font-family: inherit; width: 100%;
+            flex: 1; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px;
+            font-size: 14px; font-family: inherit; width: 100%; color: var(--ink); background: var(--surface); outline: none;
+            transition: border-color .15s;
         }
+        .add-input:focus { border-color: var(--forest); }
         .add-btn {
-            background: #2b8a3e; color: white; border: none; border-radius: 8px;
-            padding: 0 16px; font-weight: bold; cursor: pointer; flex-shrink: 0;
+            background: var(--forest); color: white; border: none; border-radius: var(--radius-sm);
+            padding: 0 16px; font-weight: 700; cursor: pointer; flex-shrink: 0; transition: background .15s;
         }
-        .add-btn:active { opacity: 0.85; }
+        .add-btn:hover { background: var(--forest-deep); }
+        .add-btn:active { transform: scale(0.97); }
 
         .record-card {
-            background: white; border-radius: 12px; padding: 14px; margin-bottom: 12px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            background: var(--surface); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 12px;
+            box-shadow: var(--shadow-sm); border: 1px solid var(--line);
         }
         .record-title-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
         .record-title-row strong { font-size: 15px; color: #111; }
-        .record-dates { font-size: 12px; color: #1c7ed6; font-weight: 600; margin-top: 2px; }
-        .record-note { font-size: 13px; color: #555; margin-top: 6px; white-space: pre-wrap; line-height: 1.4; }
+        .record-dates { font-size: 12px; color: var(--sky); font-weight: 600; margin-top: 2px; }
+        .record-note { font-size: 13px; color: var(--ink-2); margin-top: 6px; white-space: pre-wrap; line-height: 1.4; }
         .record-form { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
         .record-form-row { display: flex; gap: 8px; }
-        .record-link { font-size: 12px; color: #1c7ed6; font-weight: 600; display: inline-block; margin-top: 2px; }
+        .record-link { font-size: 12px; color: var(--sky); font-weight: 600; display: inline-block; margin-top: 2px; }
         .trip-weather-row { display: none; flex-direction: column; gap: 3px; margin-top: 6px; }
         .trip-weather-line { font-size: 12px; color: #495057; font-weight: 600; }
         .trip-food-summary { margin-top: 6px; }
-        .trip-food-summary-title { font-size: 11.5px; color: #2b8a3e; font-weight: 700; margin-bottom: 2px; }
+        .trip-food-summary-title { font-size: 11.5px; color: var(--forest); font-weight: 700; margin-bottom: 2px; }
         .trip-food-summary-line { font-size: 12px; color: #555; line-height: 1.5; }
         .food-saved-banner {
             display: flex; justify-content: space-between; align-items: center;
-            background: #ebfbee; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;
+            background: var(--forest-soft); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;
         }
-        .food-saved-banner span { font-size: 13px; color: #2b8a3e; font-weight: 700; }
+        .food-saved-banner span { font-size: 13px; color: var(--forest); font-weight: 700; }
         .food-saved-edit-btn { padding: 8px 14px; font-size: 13px; }
 
         .autocomplete-wrap { position: relative; }
@@ -255,17 +291,17 @@
         .suggest-addr { font-size: 11.5px; color: #777; margin-top: 1px; }
 
         .restaurant-card {
-            background: white; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            background: var(--surface); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 8px;
+            box-shadow: var(--shadow-sm); border: 1px solid var(--line);
         }
-        .restaurant-name { font-weight: bold; font-size: 14px; color: #111; }
+        .restaurant-name { font-weight: 700; font-size: 14px; color: var(--ink); }
         .restaurant-meta { font-size: 12px; color: #666; margin-top: 2px; }
-        .restaurant-link { font-size: 12px; color: #2b8a3e; font-weight: 600; }
+        .restaurant-link { font-size: 12px; color: var(--forest); font-weight: 600; }
 
         /* ---- 캠핑 음식: 일자별 카드 ---- */
         .food-day-card {
-            background: white; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            background: var(--surface); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 10px;
+            box-shadow: var(--shadow-sm); border: 1px solid var(--line);
         }
         .food-day-title { font-size: 13.5px; font-weight: 700; color: #333; margin-bottom: 8px; }
         /* 끼니(아침/점심/저녁)를 세로로 쌓지 않고, 그날 해당하는 끼니 수만큼 열로 나란히 배치한다. */
@@ -278,7 +314,7 @@
         .food-meal-block .add-row { margin-top: 5px; flex-direction: column; gap: 4px; }
         .food-meal-block .add-btn { width: 100%; }
         .food-meal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; gap: 4px; }
-        .food-meal-header span { font-size: 11.5px; font-weight: 700; color: #2b8a3e; }
+        .food-meal-header span { font-size: 11.5px; font-weight: 700; color: var(--forest); }
         .food-meal-remove-btn {
             width: 18px; height: 18px; border-radius: 50%; border: none; background: #f1f3f5;
             color: #868e96; font-size: 13px; line-height: 1; cursor: pointer;
@@ -297,12 +333,12 @@
         .gear-card-info { flex: 1; min-width: 0; }
         .gear-card-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
         .gear-category-tag {
-            font-size: 11px; font-weight: 700; color: #2b8a3e; background: #ebfbee;
+            font-size: 11px; font-weight: 700; color: var(--forest); background: var(--forest-soft);
             padding: 2px 8px; border-radius: 20px; flex-shrink: 0;
         }
         .gear-manufacturer { font-size: 12px; color: #868e96; }
         .gear-name { font-size: 14px; font-weight: 600; color: #222; margin-top: 3px; }
-        .gear-price { font-size: 12.5px; color: #1c7ed6; font-weight: 700; margin-top: 2px; }
+        .gear-price { font-size: 12.5px; color: var(--sky); font-weight: 700; margin-top: 2px; }
         .gear-qty-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
         .gear-qty-btn {
             width: 24px; height: 24px; border-radius: 50%; border: none; background: #f1f3f5;
@@ -347,9 +383,9 @@
         .datepicker-day.other-month { color: #dee2e6; cursor: default; }
         .datepicker-day.sunday { color: #e03131; }
         .datepicker-day.saturday { color: #1c7ed6; }
-        .datepicker-day.holiday { color: #e03131; font-weight: 700; }
-        .datepicker-day.today { box-shadow: inset 0 0 0 1.5px #2b8a3e; }
-        .datepicker-day.selected { background: #2b8a3e; color: white !important; }
+        .datepicker-day.holiday { color: var(--danger); font-weight: 700; }
+        .datepicker-day.today { box-shadow: inset 0 0 0 1.5px var(--forest); }
+        .datepicker-day.selected { background: var(--forest); color: white !important; }
         .datepicker-day .holiday-dot { position: absolute; bottom: 3px; width: 3px; height: 3px; border-radius: 50%; background: #e03131; }
         .datepicker-day.selected .holiday-dot { background: white; }
         .datepicker-footer { font-size: 11px; color: #adb5bd; text-align: center; margin-top: 8px; }
