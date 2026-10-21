@@ -538,3 +538,35 @@ document.addEventListener('click',e=>{
 document.addEventListener('keydown',e=>{if(e.key==='Escape')$$('.cm-tools-menu[open]').forEach(x=>x.open=false);});
 
 const initialPanel=$('.app-view.active');if(initialPanel){document.body.dataset.view=initialPanel.id.replace('view-','');}
+
+// Duo is an explicit browser-local preference, never part of shared camping data.
+// Width + height describe available space, not a claim to detect hardware or hinge posture.
+const DUO_KEY='campmap_duo_layout_v1';
+let duoEnabled=readLocal(DUO_KEY,false)===true;
+const duoSpace=matchMedia('(min-width: 680px) and (min-height: 600px)');
+function updateDuoLayout(){
+  document.body.classList.toggle('cm-duo-wide',duoEnabled&&duoSpace.matches);
+}
+duoSpace.addEventListener('change',updateDuoLayout);
+updateDuoLayout();
+more.addEventListener('click',()=>{
+  const d=$('.cm-more-dialog');if(!d)return;
+  const setting=section('이 기기의 화면 설정');
+  const label=element('label','cm-check-row');
+  const check=element('input');check.type='checkbox';check.checked=duoEnabled;
+  label.append(check,document.createTextNode('듀오 전용 모드'));
+  setting.append(label,empty('이 브라우저에만 저장됩니다. 접힌 화면은 기존 UI, 넓게 펼친 화면은 2열 UI로 표시합니다. 기종이나 힌지 각도를 감지하는 설정은 아닙니다.'));
+  check.onchange=()=>{duoEnabled=check.checked;writeLocal(DUO_KEY,duoEnabled);updateDuoLayout();};
+  d.append(setting);
+});
+// Resize the existing map instead of rebuilding it, preserving selected markers and form state.
+let duoMapFrame;
+const duoMapObserver=new ResizeObserver(()=>{
+  cancelAnimationFrame(duoMapFrame);
+  duoMapFrame=requestAnimationFrame(()=>{
+    if(typeof map!=='undefined'&&map&&window.naver?.maps){
+      const center=map.getCenter();naver.maps.Event.trigger(map,'resize');map.setCenter(center);
+    }
+  });
+});
+duoMapObserver.observe($('#map'));

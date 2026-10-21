@@ -70,3 +70,28 @@ body[data-view=map] .cm-sync{top:88px;right:28px;background:#ffffffed;border:1px
 
 .cm-prep-gear{grid-row:span 2}.cm-more-dialog>.cm-more-option:last-child{background:white;color:#45633b;border-color:#e5eadf;margin:12px 0;padding:20px}
 @media(max-width:1020px) and (min-width:761px){.cm-prep-gear{grid-row:auto}}
+
+/* Opt-in Duo workspace. Compact screens continue to use the existing styles. */
+body.cm-duo-wide{--cm-duo-detail:340px}
+body.cm-duo-wide #sidebar{left:50%;right:auto;top:auto;bottom:calc(10px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(560px,calc(100% - 32px));height:68px;display:flex;flex-direction:row;justify-content:space-around;gap:0;padding:5px 8px;border-radius:24px;z-index:2200}
+body.cm-duo-wide #sidebar .cm-brand,body.cm-duo-wide #sidebar-btn-food,body.cm-duo-wide #sidebar-btn-favorites,body.cm-duo-wide #sidebar-btn-fuel{display:none}
+body.cm-duo-wide #sidebar .sidebar-btn{display:flex;flex:1;flex-direction:column;align-items:center;justify-content:center;min-width:0;margin:0;padding:5px 0;font-size:11px;border-radius:18px}
+body.cm-duo-wide #sidebar-btn-more{display:flex}
+body.cm-duo-wide .app-view,body.cm-duo-wide #view-prep,body.cm-duo-wide #view-favorites{left:16px;right:16px;top:calc(12px + env(safe-area-inset-top));bottom:calc(94px + env(safe-area-inset-bottom));width:auto;border-radius:24px}
+body.cm-duo-wide .view-header{padding:18px 22px}
+body.cm-duo-wide .view-body{padding:20px;max-width:1200px;margin:auto}
+body.cm-duo-wide .cm-prep-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
+body.cm-duo-wide .cm-prep-grid>.cm-trip-selector,body.cm-duo-wide .cm-prep-grid>.cm-next-trip,body.cm-duo-wide .cm-trip-hero{grid-column:1/-1}
+body.cm-duo-wide .cm-prep-grid>.cm-section{grid-column:auto;grid-row:auto;padding:20px;min-width:0}
+body.cm-duo-wide .cm-prep-grid>.cm-trip-hero{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr}
+body.cm-duo-wide .cm-prep-gear{grid-row:span 2!important}
+body.cm-duo-wide .cm-favorite-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+body.cm-duo-wide .cm-gear-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+body.cm-duo-wide .cm-gear-summary>div:last-child{display:block;grid-column:auto}
+body.cm-duo-wide .cm-gear-toolbar{display:flex;flex-wrap:wrap}
+body.cm-duo-wide #bottom-sheet.active{top:calc(14px + env(safe-area-inset-top));bottom:calc(94px + env(safe-area-inset-bottom))!important;left:auto;right:14px;width:var(--cm-duo-detail);max-height:none;box-sizing:border-box;border-radius:24px;padding:12px 20px 24px;overflow:auto;touch-action:pan-y;transition:none}
+body.cm-duo-wide #bottom-sheet.active .sheet-grab{display:none}
+body.cm-duo-wide[data-view="map"]:has(#bottom-sheet.active) #map{width:calc(100% - var(--cm-duo-detail) - 28px)}
+body.cm-duo-wide[data-view="map"] .search-wrapper{left:18px;right:auto;transform:none;width:calc(100% - 36px);max-width:380px}
+body.cm-duo-wide[data-view="map"]:has(#bottom-sheet.active) .search-wrapper{max-width:calc(100% - var(--cm-duo-detail) - 64px)}
+body.cm-duo-wide[data-view="map"]:has(#bottom-sheet.active) .gps-btn{right:calc(var(--cm-duo-detail) + 42px)}
