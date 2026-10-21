@@ -121,7 +121,7 @@ const oldRenderGear=renderGearView;
 renderGearView = function() {
   const checklistSelect=$('#checklist-select');const selected=activeChecklistName;checklistSelect.replaceChildren(new Option('체크리스트 선택...',''));Object.keys(gearData.checklists).forEach(name=>checklistSelect.append(new Option(name,name)));checklistSelect.value=selected&&gearData.checklists[selected]?selected:'';renderChecklistDetail();
   const root=$('#gear-master-list');root.replaceChildren();
-  const controls=element('div','cm-section');const row=element('div','cm-row');
+  const controls=element('div','cm-gear-toolbar');const row=element('div','cm-row cm-search-row');
   const search=field('장비 검색','search',searchGear);search.input.placeholder='이름 · 제조사 · 분류';search.input.oninput=()=>{searchGear=search.input.value;renderGearResults(root,results);};
   const select=element('select');select.setAttribute('aria-label','장비 분류');select.append(new Option('모든 분류',''));
   [...new Set(gearData.items.map(x=>x.category||'미분류'))].sort().forEach(x=>select.append(new Option(x,x)));select.value=categoryFilter;
@@ -131,8 +131,8 @@ renderGearView = function() {
   const sum=gearData.items.reduce((s,x)=>s+Number(x.price||0)*(x.quantity||1),0);
   const used=gearData.items.reduce((s,x)=>s+Number(x.usedPrice||0),0);
   totals.textContent=gearData.items.length+'종 · '+gearData.items.reduce((s,x)=>s+(x.quantity||1),0)+'개 · 구입 합계 '+money(sum);
-  controls.append(totals,empty('입력된 중고가 합계 '+money(used)+' · 중고가는 각 행의 총액 기준입니다.'));
-  controls.append(button('시트 가져오기',showImport),button('백업 · 복원',showBackups),button('내보내기',exportGear),button('장비 프리셋',showPresets));
+  const summary=element('div','cm-gear-summary');summary.innerHTML='<div><span>함께 모은 장비</span><strong>'+gearData.items.length+'<small>종</small></strong><p>보유 수량 '+gearData.items.reduce((s,x)=>s+(x.quantity||1),0)+'개</p></div><div><span>구입 금액</span><strong>'+Number(sum).toLocaleString('ko-KR')+'<small>원</small></strong><p>단가 × 보유 수량 합계</p></div><div><span>입력된 중고가</span><strong>'+Number(used).toLocaleString('ko-KR')+'<small>원</small></strong><p>입력한 장비 전체 금액 기준</p></div>';root.append(summary);
+  const tools=element('details','cm-tools-menu');tools.append(element('summary','','목록 관리'));const toolButtons=element('div','cm-tools-content');toolButtons.append(button('시트 가져오기',()=>{tools.open=false;showImport();}),button('백업 · 복원',()=>{tools.open=false;showBackups();}),button('내보내기',()=>{tools.open=false;exportGear();}));tools.append(toolButtons);const actions=element('div','cm-toolbar-actions');actions.append(button('장비 프리셋',showPresets),tools,button('+ 장비 추가',()=>{const add=$('#cm-add-gear');if(add){add.open=!add.open;if(add.open){add.scrollIntoView({behavior:'smooth',block:'start'});$('#gear-name-input').focus();}}},'cm-button cm-primary'));controls.append(actions);
   root.append(controls);const results=element('div');root.append(results);renderGearResults(root,results);
 };
 function renderGearResults(root,results) {
@@ -143,14 +143,14 @@ function renderGearResults(root,results) {
   [...groups].sort(([a],[b])=>a.localeCompare(b,'ko')).forEach(([cat,list])=>{
     const group=element('div','gear-category-group');
     const open=term||categoryFilter||expandedGearCategories.has(cat);
-    const head=button(cat+' · '+list.length+'종 · '+money(list.reduce((s,x)=>s+Number(x.price||0)*(x.quantity||1),0))+' '+(open?'▲':'▼'),()=>{if(expandedGearCategories.has(cat))expandedGearCategories.delete(cat);else expandedGearCategories.add(cat);renderGearView();},'gear-category-header');
+    const head=button('',()=>{if(expandedGearCategories.has(cat))expandedGearCategories.delete(cat);else expandedGearCategories.add(cat);renderGearView();},'gear-category-header');head.setAttribute('aria-expanded',String(!!open));head.innerHTML='<span class="cm-category-icon" aria-hidden="true">'+categorySymbol(cat)+'</span><span class="cm-category-title"><strong>'+esc(cat)+'</strong><small>'+list.length+'종의 장비</small></span><span class="cm-category-total">'+money(list.reduce((s,x)=>s+Number(x.price||0)*(x.quantity||1),0))+'</span><span class="cm-chevron" aria-hidden="true">'+(open?'−':'+')+'</span>';
     group.append(head);
     if(open)list.forEach(item=>{
       const card=element('div','item-card gear-card');const info=element('div','gear-card-info');
       info.append(element('div','cm-muted',item.manufacturer),element('div','gear-name',item.name));
       info.append(element('div','gear-price',money(item.price)+' × '+(item.quantity||1)+' = '+money(Number(item.price||0)*(item.quantity||1))));
       if(item.usedPrice!=null)info.append(element('div','cm-muted','중고가 '+money(item.usedPrice)));
-      const actions=element('div','cm-row');actions.append(button('−',()=>changeGearQty(item.id,-1)),element('span','',(item.quantity||1)+'개'),button('+',()=>changeGearQty(item.id,1)),button('수정',()=>editGear(item)),button('삭제',()=>deleteGearItem(item.id)));
+      const actions=element('div','cm-row cm-gear-row-actions');const qty=element('div','cm-stepper');qty.append(button('−',()=>changeGearQty(item.id,-1)),element('span','',(item.quantity||1)+'개'),button('+',()=>changeGearQty(item.id,1)));const menu=element('details','cm-tools-menu');const menuTitle=element('summary','','•••');menuTitle.setAttribute('aria-label',item.name+' 장비 관리');menu.append(menuTitle);const menuContent=element('div','cm-tools-content');menuContent.append(button('수정',()=>{menu.open=false;editGear(item);}),button('삭제',()=>deleteGearItem(item.id),'cm-button cm-danger'));menu.append(menuContent);actions.append(qty,menu);
       info.append(actions);card.append(info);group.append(card);
     });results.append(group);
   });
@@ -284,17 +284,17 @@ function renderPrep(){
   const root=$('.view-body',prepPanel);root.replaceChildren();
   const trips=allTrips();const upcoming=[...recordsData.upcoming].sort((a,b)=>(a.startDate||'').localeCompare(b.startDate||''));
   if(!trips.some(t=>t.id===selectedPrepTrip))selectedPrepTrip=upcoming[0]?.id||trips[0]?.id||'';
-  const select=element('select');select.setAttribute('aria-label','준비할 캠핑 일정');
+  const select=element('select');select.className='cm-trip-selector';select.setAttribute('aria-label','준비할 캠핑 일정');
   trips.forEach(t=>select.append(new Option((recordsData.upcoming.some(x=>x.id===t.id)?'예정 · ':'지난 · ')+(t.title||t.campName)+' · '+(t.startDate||'날짜 미정'),t.id)));
   select.value=selectedPrepTrip;select.onchange=()=>{selectedPrepTrip=select.value;renderPrep();};
-  root.append(select);if(!trips.length){root.append(empty('캠핑 일정을 먼저 추가해 주세요.'),button('일정 추가',()=>switchView('records')));return;}
+  root.append(select);if(!trips.length){const welcome=section('다음 캠핑은 어디로 갈까요?');welcome.classList.add('cm-empty-card');welcome.append(empty('일정을 등록하면 장비, 식단, 장보기를 한곳에서 준비할 수 있어요.'),button('첫 캠핑 일정 만들기',()=>switchView('records'),'cm-button cm-primary'));root.append(welcome);return;}if(!upcoming.length){const notice=element('div','cm-next-trip');notice.append(element('span','','새로운 캠핑을 계획해 볼까요?'),button('+ 일정 만들기',()=>switchView('records'),'cm-button cm-primary'));root.prepend(notice);}
   const trip=trips.find(t=>t.id===selectedPrepTrip),prep=tripPrep(trip.id);
-  const hero=section(trip.title||trip.campName);hero.append(element('p','',recordDateRangeLabel(trip)));
+  const hero=section(trip.title||trip.campName);hero.classList.add('cm-trip-hero');hero.prepend(element('span','cm-eyebrow',recordsData.upcoming.some(x=>x.id===trip.id)?'다음 여행, 함께 준비해요':'우리가 다녀온 캠핑'));hero.append(element('p','cm-trip-dates',recordDateRangeLabel(trip)));
   const gearEntries=Object.entries(prep.gear||{}),packed=gearEntries.filter(([,v])=>v.packed).length;
   const needs=(prep.shopping||[]).filter(x=>!x.owned),bought=needs.filter(x=>x.bought).length;
-  hero.append(element('p','cm-metric','장비 '+packed+'/'+gearEntries.length+'종 준비 · 장보기 '+bought+'/'+needs.length+'건 완료'));
-  const weather=element('div','cm-weather');hero.append(weather);loadPrepWeather(trip,weather);root.append(hero);
-  const gear=section('이번 캠핑에 가져갈 장비');gear.append(button('장비 · 가져갈 수량 선택',()=>{
+  const progress=element('div','cm-progress-grid');for(const[label,value,total]of [['장비 준비',packed,gearEntries.length],['장보기',bought,needs.length]]){const card=element('div','cm-progress-card');card.innerHTML='<span>'+label+'</span><strong>'+value+'<small> / '+total+'</small></strong><progress max="'+Math.max(total,1)+'" value="'+value+'" aria-label="'+label+' 완료 현황"></progress><p>'+(total?'남은 항목 '+(total-value)+'개':'목록을 만들어 시작해요')+'</p>';progress.append(card);}hero.append(progress);
+  const weather=element('div','cm-weather');weather.setAttribute('aria-label','캠핑 날씨');hero.append(weather);loadPrepWeather(trip,weather);root.append(hero);
+  const gear=section('이번에 가져갈 장비');gear.classList.add('cm-prep-gear');gear.append(button('장비 · 가져갈 수량 선택',()=>{
     const quantities=Object.fromEntries(gearEntries.map(([id,v])=>[id,v.quantity]));
     gearPicker('이번 일정 장비 선택',quantities,entries=>{const next={};for(const[id,quantity]of Object.entries(entries))next[id]={quantity,packed:prep.gear[id]?.quantity===quantity&&!!prep.gear[id]?.packed};tripPrep(trip.id,true).gear=next;persistExtra();renderPrep();});
   }),button('프리셋 적용',()=>applyPreset(trip.id)),button('프리셋 관리',showPresets));
@@ -307,12 +307,12 @@ function renderPrep(){
     row.append(button('빼기',()=>{delete tripPrep(trip.id,true).gear[id];persistExtra();renderPrep();}));gear.append(row);
   }
   root.append(gear);
-  const meals=section('식단');const days=foodData.trips[trip.id]?.days||{};let mealCount=0;
+  const meals=section('함께 먹을 메뉴');meals.classList.add('cm-prep-meals');const days=foodData.trips[trip.id]?.days||{};let mealCount=0;
   for(const[date,day]of Object.entries(days))for(const meal of FOOD_MEALS){const entry=day[meal.key];if(!entry||entry.included===false)continue;for(const item of entry.items||[]){mealCount++;meals.append(element('p','',date.slice(5)+' '+meal.label+' · '+item.name));}}
   if(!mealCount)meals.append(empty('등록된 메뉴가 없습니다.'));
   meals.append(button('식단 보기 · 편집',()=>{switchView('food');activeFoodTripId=trip.id;renderFoodView();const select=$('#food-trip-select');if(select){select.value=trip.id;onFoodTripChange();}}),button('메뉴별 재료 관리',showRecipes));
   root.append(meals);root.append(renderShopping(trip));
-  const note=section('캠핑장 메모');note.append(element('p','',trip.note||'일정에 저장된 메모가 없습니다.'),button('즐겨찾기에 저장 · 메모',()=>editFavorite({name:trip.title||trip.campName,address:trip.note||'',lat:trip.lat,lng:trip.lng})));root.append(note);
+  const note=section('캠핑장 메모');note.classList.add('cm-prep-note');note.append(element('p','',trip.note||'일정에 저장된 메모가 없습니다.'),button('즐겨찾기에 저장 · 메모',()=>editFavorite({name:trip.title||trip.campName,address:trip.note||'',lat:trip.lat,lng:trip.lng})));root.append(note);
 }
 const forecastOriginal=fetchTripForecast;
 fetchTripForecast=async function(lat,lng,start,end){
@@ -361,13 +361,13 @@ function generateShopping(trip){
   const count=next.length;p.shopping=[...(p.shopping||[]).filter(x=>!x.generated),...next];persistExtra();renderPrep();showToast(count+'개 구매 항목을 식단에서 생성했습니다. 같은 재료·단위는 합산했습니다.');
 }
 function renderShopping(trip){
-  const p=tripPrep(trip.id),s=section('장보기');s.append(button('식단에서 장보기 생성 · 갱신',()=>generateShopping(trip)),button('구매 항목 직접 추가',()=>dialog('구매 항목 추가',d=>{
+  const p=tripPrep(trip.id),s=section('장보기 목록');s.classList.add('cm-prep-shopping');s.append(button('식단에서 장보기 생성 · 갱신',()=>generateShopping(trip)),button('구매 항목 직접 추가',()=>dialog('구매 항목 추가',d=>{
     const name=field('구매할 항목'),q=field('수량','number',1),unit=field('단위','text','개');q.input.min='0.001';q.input.step='any';d.append(name.wrap,q.wrap,unit.wrap);
     d.append(button('추가',()=>{if(!name.input.value.trim()||!Number.isFinite(Number(q.input.value))||Number(q.input.value)<=0){showToast('항목과 수량을 확인해 주세요.');return;}tripPrep(trip.id,true).shopping.push({id:uid(),name:name.input.value.trim(),quantity:Number(q.input.value),unit:unit.input.value.trim(),owned:false,bought:false,generated:false});persistExtra();d.close();renderPrep();}));
   })));
   if(!p.shopping?.length)s.append(empty('식단을 정한 뒤 생성하거나 직접 추가하세요.'));
   for(const item of p.shopping||[]){
-    const row=element('div','cm-section');row.append(element('strong','',item.name+' · '+Number(item.quantity.toFixed(3))+(item.unit||'')));
+    const row=element('div','cm-shopping-item');row.append(element('strong','',item.name+' · '+Number(item.quantity.toFixed(3))+(item.unit||'')));
     if(item.sources?.length)row.append(empty(item.sources.join(' / ')));
     for(const[key,label]of [['owned','이미 보유'],['bought','구매 완료']]){const f=field(label,'checkbox');f.input.checked=!!item[key];f.input.onchange=()=>{const target=tripPrep(trip.id,true).shopping.find(x=>x.id===item.id);if(target)target[key]=f.input.checked;persistExtra();renderPrep();};row.append(f.wrap);}
     row.append(button('제거',()=>{const list=tripPrep(trip.id,true).shopping;const old=clone(list);tripPrep(trip.id,true).shopping=list.filter(x=>x.id!==item.id);persistExtra();renderPrep();showToast('구매 항목 제거됨',()=>{tripPrep(trip.id,true).shopping=old;persistExtra();renderPrep();});}));s.append(row);
@@ -470,3 +470,71 @@ $('.view-body',prepPanel).append(offlineHint);
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/sw.js').then(()=>navigator.serviceWorker.ready).then(()=>{document.documentElement.dataset.offlineReady='true';}).catch(()=>{console.warn('오프라인 화면 준비에 실패했습니다.');});
 }
+
+// Interface layer: clear workspaces, consistent line icons, and thumb-friendly navigation.
+function uiIcon(name){
+  const paths={
+    map:'<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z"/><path d="M9 3v15m6-12v15"/>',
+    prep:'<path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><rect x="5" y="6" width="14" height="15" rx="4"/><path d="m9 13 2 2 4-4"/>',
+    gear:'<path d="m2 20 10-17 10 17H2Zm10-17v17m0-7-4 7m4-7 4 7"/>',
+    records:'<rect x="3" y="5" width="18" height="16" rx="4"/><path d="M7 3v4m10-4v4M3 11h18m-13 5h2m4 0h2"/>',
+    food:'<path d="M4 3v6a3 3 0 0 0 6 0V3M7 3v18m11 0V3c-4 3-4 9 0 10"/>',
+    favorites:'<path d="m12 3 2.8 5.7 6.3.9-4.6 4.5 1.1 6.3-5.6-3-5.6 3 1.1-6.3-4.6-4.5 6.3-.9L12 3Z"/>',
+    fuel:'<path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M2 21h14M4 9h10m0 5h2a2 2 0 0 1 2 2v2a2 2 0 0 0 4 0V9l-4-4m2 2v4h2"/>',
+    more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+    storage:'<path d="M3 7h18v14H3V7Zm-1-4h20v4H2V3Zm7 9h6"/>',
+    light:'<path d="M8 14a6 6 0 1 1 8 0l-1 3H9l-1-3Zm1 7h6m-5-4v4m4-4v4"/>',
+    chair:'<path d="M6 14V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v9M4 10v7h16v-7M6 17v4m12-4v4"/>',
+    table:'<path d="M2 8h20v5H2V8Zm3 5v8m14-8v8"/>'
+  };
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(paths[name]||paths.gear)+'</svg>';
+}
+function categorySymbol(cat){
+  return uiIcon(/테이블/.test(cat)?'table':/의자/.test(cat)?'chair':/램프/.test(cat)?'light':/수납/.test(cat)?'storage':/식기|버너/.test(cat)?'food':/텐트|타프/.test(cat)?'gear':'prep');
+}
+const navNames={map:'지도',prep:'준비',gear:'장비',records:'기록',food:'식단',favorites:'즐겨찾기',fuel:'등유'};
+const sidebar=$('#sidebar');sidebar.setAttribute('aria-label','주요 메뉴');
+const brand=element('div','cm-brand');brand.innerHTML=uiIcon('gear')+'<strong>마이캠핑</strong><small>함께 떠나는 시간</small>';sidebar.prepend(brand);
+for(const view of ['map','prep','gear','records','food','favorites','fuel']){
+  const b=$('#sidebar-btn-'+view);if(!b)continue;b.innerHTML='<span class="sidebar-icon">'+uiIcon(view)+'</span><span>'+navNames[view]+'</span>';b.setAttribute('aria-label',navNames[view]);b.title=navNames[view];sidebar.append(b);
+}
+const more=button('',()=>dialog('더보기',d=>{
+  d.classList.add('cm-more-dialog');d.append(empty('캠핑의 나머지 즐거움도 한곳에서.'));
+  for(const view of ['food','favorites','fuel']){const b=button('',()=>{d.close();if(view==='fuel'){switchView('map');toggleFuelLayer();}else switchView(view);},'cm-more-option');b.innerHTML=uiIcon(view)+'<span><strong>'+navNames[view]+'</strong><small>'+({food:'식단과 메뉴 계획',favorites:'다시 가고 싶은 캠핑장',fuel:'주변 등유 가격 확인'}[view])+'</small></span><span aria-hidden="true">›</span>';d.append(b);}
+}),'sidebar-btn cm-more-nav');more.id='sidebar-btn-more';more.setAttribute('aria-label','더보기');more.innerHTML='<span class="sidebar-icon">'+uiIcon('more')+'</span><span>더보기</span>';sidebar.append(more);
+const gearPanel=$('#view-gear');
+const addForm=$('#gear-name-input').parentElement;
+const addDetails=element('details','cm-add-form');addDetails.id='cm-add-gear';addDetails.append(element('summary','','새 장비 등록'),addForm);$('#gear-master-list').before(addDetails);
+const legacy=$('#checklist-select').parentElement,legacyDetails=element('details','cm-legacy-checklist');
+legacyDetails.append(element('summary','','간단 체크리스트'));legacy.before(legacyDetails);legacyDetails.append(legacy);
+const gearHeading=$('.view-body > h3',gearPanel);if(gearHeading)gearHeading.hidden=true;
+for(const[view,title]of [['gear','내 장비'],['prep','캠핑 준비'],['records','캠핑 기록'],['food','식단 계획'],['favorites','즐겨찾기']]){
+  const panel=$('#view-'+view),heading=$('.view-header h2',panel);if(heading)heading.textContent=title;
+  const close=$('.view-close-btn',panel);if(close)close.setAttribute('aria-label','지도로 돌아가기');
+}
+const beforeUISwitch=switchView;
+switchView=function(view){
+  beforeUISwitch(view);
+  document.body.dataset.view=view;
+  for(const id of Object.keys(navNames)){const b=$('#sidebar-btn-'+id);if(b)b.setAttribute('aria-current',id===view?'page':'false');}
+  more.classList.toggle('active',['food','favorites'].includes(view));
+  const panel=$('#view-'+view);if(panel)panel.setAttribute('aria-label',navNames[view]||view);
+};
+document.body.dataset.view='map';
+const basicPrepRender=renderPrep;
+renderPrep=function(){
+  basicPrepRender();
+  const root=$('.view-body',prepPanel);root.classList.add('cm-prep-grid');
+  const hero=$('.cm-trip-hero',root);
+  if(hero){const art=element('div','cm-landscape');art.setAttribute('aria-hidden','true');art.innerHTML='<svg viewBox="0 0 220 130" fill="none"><circle cx="176" cy="27" r="15" fill="currentColor" opacity=".28"/><path d="m0 130 65-80 50 59 35-42 70 63H0Z" fill="currentColor" opacity=".12"/><path d="m50 120 44-73 44 73H50Z" fill="currentColor" opacity=".2"/><path d="m64 120 30-51 30 51H64Zm30-51v51" stroke="currentColor" stroke-width="2" opacity=".6"/><path d="M17 120h185" stroke="currentColor" opacity=".4"/></svg>';hero.append(art);}
+  const meals=$('.cm-prep-meals',root);if(meals){const paragraphs=$$('p',meals).filter(p=>!p.classList.contains('cm-muted'));for(const p of paragraphs)p.classList.add('cm-menu-line');}
+};
+const basicFavRender=renderFavorites;
+renderFavorites=function(){basicFavRender();const root=$('.view-body',favPanel);root.classList.add('cm-favorite-grid');if(!extra.favorites.length){const p=$('p',root);if(p){p.classList.add('cm-empty-card');p.prepend(element('span','cm-empty-symbol','☆'));}}};
+document.addEventListener('click',e=>{
+  const details=e.target.closest('.cm-tools-menu');if(details){$$('.cm-tools-menu[open]').forEach(other=>{if(other!==details)other.open=false;});}
+  else $$('.cm-tools-menu[open]').forEach(other=>other.open=false);
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$$('.cm-tools-menu[open]').forEach(x=>x.open=false);});
+
+const initialPanel=$('.app-view.active');if(initialPanel){document.body.dataset.view=initialPanel.id.replace('view-','');}
