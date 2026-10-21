@@ -1,0 +1,17 @@
+{
+  "name": "내 전용 캠핑 지도",
+  "short_name": "마이캠핑",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f7f4",
+  "theme_color": "#1f7a4d",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

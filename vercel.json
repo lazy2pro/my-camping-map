@@ -1,9 +1,44 @@
 {
   "version": 2,
-  "regions": ["icn1"],
+  "regions": [
+    "icn1"
+  ],
   "functions": {
-    "api/camping.js": { "maxDuration": 10 },
-    "api/reservation-link.js": { "maxDuration": 15 },
-    "api/holidays.js": { "maxDuration": 10 }
-  }
+    "api/camping.js": {
+      "maxDuration": 10
+    },
+    "api/reservation-link.js": {
+      "maxDuration": 15
+    },
+    "api/holidays.js": {
+      "maxDuration": 10
+    },
+    "api/sync.js": {
+      "maxDuration": 30
+    }
+  },
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
+      ]
+    },
+    {
+      "source": "/api/sync",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    }
+  ]
 }
