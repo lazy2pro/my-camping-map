@@ -51,7 +51,8 @@ initialSync = async function() {
   try {
     const {r,data}=await requestJSON('/api/sync');if(!r.ok)throw Error(data.error||'연결 실패');
     const remote=normalizeState(data.state||{});
-    const changes=diff(base || (data.state ? bootSnapshot : normalizeState({})),collect());
+    const changes=diff(base || bootSnapshot,collect());
+    // Preserve additions made before initial sync completed, even if the server has older data.
     const merged=applyChanges(remote,changes);
     if(merged.conflicts.length){conflictState={remote,changes};status('동시 수정 · 확인 필요','error');}
     else { installState(merged.state);storeBase(remote);status(changes.length?'저장 대기…':'저장 완료'); }
