@@ -68,7 +68,14 @@ initialSync = async function() {
     }
     const merged=applyChanges(remote,changes);
     if(merged.conflicts.length){conflictState={remote,changes};status('동시 수정 · 확인 필요','error');}
-    else { installState(merged.state);storeBase(serverSnapshot);status(diff(serverSnapshot,merged.state).length?'저장 대기…':'저장 완료'); }
+    else {
+      const latest=collect();
+      const inFlight=diff(local,latest);
+      const final=applyChanges(merged.state,inFlight,true);
+      installState(final.state);
+      storeBase(serverSnapshot);
+      status(diff(serverSnapshot,final.state).length?'저장 대기…':'저장 완료');
+    }
     ready=true;retryCount=0;refreshAll();
   } catch { status(navigator.onLine?'연결 실패 · 변경사항 보관 중':'오프라인 · 기기에 저장','pending');scheduleRetry(); }
   finally {syncing=false;}
@@ -328,7 +335,7 @@ function renderPrep(){
   const weather=element('div','cm-weather');weather.setAttribute('aria-label','캠핑 날씨');hero.append(weather);loadPrepWeather(trip,weather);root.append(hero);
   const gear=section('이번에 가져갈 장비');gear.classList.add('cm-prep-gear');gear.append(button('장비 · 가져갈 수량 선택',()=>{
     const quantities=Object.fromEntries(gearEntries.map(([id,v])=>[id,v.quantity]));
-    gearPicker('이번 일정 장비 선택',quantities,entries=>{const next={};for(const[id,quantity]of Object.entries(entries))next[id]={quantity,packed:prep.gear[id]?.quantity===quantity&&!!prep.gear[id]?.packed};tripPrep(trip.id,true).gear=next;persistExtra();renderPrep();});
+    gearPicker('이번 일정 장비 선택',quantities,entries=>{const next={};for(const[id,quantity]of Object.entries(entries))next[id]={quantity,packed:prep.gear[id]?.quantity===quantity&&!!prep.gear[id]?.packed};const p=tripPrep(trip.id,true),previous=clone(p.gear);p.gear=next;if(!persistExtra()){p.gear=previous;showToast('장비 선택을 저장하지 못했습니다.');return;}renderPrep();showToast('이번 일정 장비 선택을 기기에 저장했습니다.');});
   }),button('프리셋 적용',()=>applyPreset(trip.id)),button('프리셋 관리',showPresets));
   if(!gearEntries.length)gear.append(empty('필요한 장비만 선택하세요. 보유 목록은 그대로 유지됩니다.'));
   for(const[id,entry]of gearEntries){const item=gearData.items.find(x=>x.id===id);
