@@ -63,6 +63,8 @@ initialSync = async function() {
       };
       remote.records.upcoming=union(remote.records.upcoming,local.records.upcoming);
       remote.records.history=union(remote.records.history,local.records.history);
+      // Trip-specific packing and shopping must survive first cloud connection.
+      remote.extra.trips={...(remote.extra.trips||{}),...(local.extra.trips||{})};
     }
     const merged=applyChanges(remote,changes);
     if(merged.conflicts.length){conflictState={remote,changes};status('동시 수정 · 확인 필요','error');}
