@@ -338,6 +338,29 @@ function renderPrep(){
     row.append(label);if(!item||entry.quantity>(item.quantity||1))row.append(element('span','cm-warning',item?'보유 수량 확인':'목록에서 제거 필요'));
     row.append(button('빼기',()=>{delete tripPrep(trip.id,true).gear[id];persistExtra();renderPrep();}));gear.append(row);
   }
+  const missing=section('추가로 필요한 장비');missing.classList.add('cm-prep-missing-gear');
+  missing.append(button('+ 없는 장비 메모',()=>dialog('필요한 장비 추가',d=>{
+    const name=field('장비 이름'),memo=field('메모','textarea');
+    d.append(name.wrap,memo.wrap,button('저장',()=>{
+      if(!name.input.value.trim()){showToast('장비 이름을 입력해 주세요.');return;}
+      const p=tripPrep(trip.id,true);p.missingGear=p.missingGear||[];
+      p.missingGear.push({id:uid(),name:name.input.value.trim(),memo:memo.input.value.trim(),done:false});
+      persistExtra();d.close();renderPrep();
+    }));
+  })));
+  for(const item of prep.missingGear||[]){
+    const row=element('div','cm-check-row');
+    const label=element('label'),check=element('input');check.type='checkbox';check.checked=!!item.done;
+    check.onchange=()=>{const target=tripPrep(trip.id,true).missingGear.find(x=>x.id===item.id);if(target)target.done=check.checked;persistExtra();};
+    label.append(check,document.createTextNode(item.name));row.append(label);
+    if(item.memo)row.append(element('span','cm-muted',item.memo));
+    row.append(button('수정',()=>dialog('필요한 장비 수정',d=>{
+      const name=field('장비 이름','text',item.name),memo=field('메모','textarea',item.memo||'');
+      d.append(name.wrap,memo.wrap,button('저장',()=>{if(!name.input.value.trim())return showToast('장비 이름을 입력해 주세요.');const target=tripPrep(trip.id,true).missingGear.find(x=>x.id===item.id);if(target)Object.assign(target,{name:name.input.value.trim(),memo:memo.input.value.trim()});persistExtra();d.close();renderPrep();}));
+    })),button('삭제',()=>{const p=tripPrep(trip.id,true);p.missingGear=p.missingGear.filter(x=>x.id!==item.id);persistExtra();renderPrep();}));
+    missing.append(row);
+  }
+  gear.append(missing);
   root.append(gear);
   const meals=section('함께 먹을 메뉴');meals.classList.add('cm-prep-meals');const days=foodData.trips[trip.id]?.days||{};let mealCount=0;
   for(const[date,day]of Object.entries(days))for(const meal of FOOD_MEALS){const entry=day[meal.key];if(!entry||entry.included===false)continue;for(const item of entry.items||[]){mealCount++;meals.append(element('p','',date.slice(5)+' '+meal.label+' · '+item.name));}}
