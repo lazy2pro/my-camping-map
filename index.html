@@ -492,6 +492,13 @@
 <meta name="theme-color" content="#1f7a4d">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="stylesheet" href="/app-upgrade.css">
+
+<style>
+#map-fuel-toggle{position:fixed;z-index:96;top:calc(112px + env(safe-area-inset-top));left:16px;border:1px solid #d9e5d9;border-radius:18px;background:rgba(255,255,255,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:#20563d;font-weight:750;font-size:13px;padding:12px 15px;box-shadow:0 5px 18px #102a1820;cursor:pointer}
+#map-fuel-toggle.active{background:#24664e;color:white}
+@media(min-width:761px){#map-fuel-toggle{left:calc(84px + env(safe-area-inset-left))}}
+@media(max-width:760px){#map-fuel-toggle{top:calc(112px + env(safe-area-inset-top));left:14px;padding:10px 12px;font-size:12px}}
+</style>
 </head>
 <body>
 
@@ -524,6 +531,7 @@
 
 <div id="status-badge"></div>
 
+<button id="map-fuel-toggle" type="button" onclick="toggleFuelLayer()" aria-pressed="false" aria-label="지도에서 등유 가격 조회">⛽ 등유 조회</button>
 <ul id="fuel-price-list"></ul>
 
 <div id="legend">
@@ -857,7 +865,7 @@ async function fetchFuelStations(lat, lng, radius) {
     if (!res.ok) {
         throw new Error(data.error || '등유 가격 정보를 불러오지 못했습니다.');
     }
-    const stations = data.stations || [];
+    const stations = (data.stations || []).filter(station => Number.isFinite(station.price) && station.price > 0);
     fuelCache.set(key, { stations, ts: Date.now() });
     if (fuelCache.size > FUEL_CACHE_LIMIT) {
         fuelCache.delete(fuelCache.keys().next().value);
@@ -978,7 +986,9 @@ async function fetchFuelInView() {
 function toggleFuelLayer() {
     fuelLayerActive = !fuelLayerActive;
     const btn = document.getElementById('sidebar-btn-fuel');
-    btn.classList.toggle('active', fuelLayerActive);
+    if (btn) btn.classList.toggle('active', fuelLayerActive);
+    const mapBtn = document.getElementById('map-fuel-toggle');
+    if (mapBtn) { mapBtn.classList.toggle('active', fuelLayerActive); mapBtn.setAttribute('aria-pressed', String(fuelLayerActive)); mapBtn.textContent = fuelLayerActive ? '⛽ 등유 끄기' : '⛽ 등유 조회'; }
 
     if (fuelLayerActive) {
         showStatus('주변 등유 가격 불러오는 중...');
