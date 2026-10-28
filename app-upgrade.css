@@ -95,3 +95,31 @@ body.cm-duo-wide[data-view="map"]:has(#bottom-sheet.active) #map{width:calc(100%
 body.cm-duo-wide[data-view="map"] .search-wrapper{left:18px;right:auto;transform:none;width:calc(100% - 36px);max-width:380px}
 body.cm-duo-wide[data-view="map"]:has(#bottom-sheet.active) .search-wrapper{max-width:calc(100% - var(--cm-duo-detail) - 64px)}
 body.cm-duo-wide[data-view="map"]:has(#bottom-sheet.active) .gps-btn{right:calc(var(--cm-duo-detail) + 42px)}
+
+
+/* Compact equipment lists: tighter typography, rows and card spacing. */
+.gear-category-group{margin-bottom:7px}
+.gear-category-header{padding:10px 12px;min-height:52px;gap:8px}
+.cm-category-icon{width:30px;height:30px}
+.cm-category-title strong{font-size:12px;line-height:1.3;letter-spacing:-.035em}
+.cm-category-title small,.cm-category-total{font-size:10px;line-height:1.3;letter-spacing:-.02em}
+.gear-card{padding:10px 12px!important;gap:6px;line-height:1.35;letter-spacing:-.025em}
+.gear-name{font-size:12px;line-height:1.35;letter-spacing:-.035em}
+.gear-card-info,.gear-price{font-size:10px!important;line-height:1.35}
+.cm-gear-row-actions{margin-top:7px;gap:6px}
+.cm-stepper .cm-button{min-height:34px;min-width:34px;padding:5px 8px}
+.cm-stepper>span{min-width:28px;font-size:12px}
+.cm-prep-gear .cm-check-row,.cm-prep-missing-gear .cm-check-row{font-size:12px;line-height:1.35;letter-spacing:-.025em;gap:7px;padding:8px 2px}
+.cm-prep-gear .cm-check-row .cm-button{font-size:10px;padding:6px 9px;min-height:32px}
+.cm-picker{gap:0}
+.cm-pick-row{padding:9px 4px;gap:8px;font-size:12px;line-height:1.35;letter-spacing:-.025em}
+.cm-pick-row>span{flex:1;min-width:0}
+.cm-pick-row .cm-quantity-stepper{gap:5px!important}
+.cm-pick-row .cm-quantity-stepper .cm-button{min-width:36px!important;min-height:38px!important;padding:5px 9px!important;font-size:18px!important}
+@media(max-width:760px){
+ .gear-category-header{padding:10px 11px;min-height:54px}
+ .gear-card{padding:10px 11px!important}
+ .gear-name{font-size:12px}
+ .cm-gear-row-actions{margin-top:7px}
+ .cm-pick-row{font-size:11px;gap:7px}
+}
