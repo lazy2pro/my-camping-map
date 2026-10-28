@@ -263,7 +263,30 @@ switchView=function(view){
 function allTrips(){return [...recordsData.upcoming,...recordsData.history].sort((a,b)=>(b.startDate||'').localeCompare(a.startDate||''));}
 function tripPrep(id,create=false){
   if(!extra.trips[id]&&create)extra.trips[id]={gear:{},shopping:[]};
-  return extra.trips[id]||{gear:{},shopping:[]};
+  const p=extra.trips[id]||{gear:{},shopping:[]};
+  // Gear uses the same per-trip bucket and persistence path as meal plans.
+  const foodBucket=foodData.trips[id];
+  if(foodBucket?.gear && Object.keys(foodBucket.gear).length) p.gear=foodBucket.gear;
+  else if(foodBucket?.gear && !Object.keys(p.gear||{}).length) p.gear=foodBucket.gear;
+  return p;
+}
+function saveTripGear(tripId,gear){
+  const previous=clone(foodData.trips[tripId]?.gear);
+  const bucket=ensureTripFoodBucket(tripId);
+  bucket.gear=clone(gear);
+  const serialized=JSON.stringify(foodData);
+  try{
+    localStorage.setItem(FOOD_STORAGE_KEY,serialized);
+    if(localStorage.getItem(FOOD_STORAGE_KEY)!==serialized)throw Error('Storage verification failed');
+  }catch(e){
+    if(previous===undefined)delete bucket.gear;else bucket.gear=previous;
+    showToast('장비 저장에 실패했습니다. 저장 공간을 확인해 주세요.');
+    return false;
+  }
+  const p=tripPrep(tripId,true);p.gear=clone(gear);
+  writeLocal('campmap_extra_v2',extra);
+  debouncedSync();
+  return true;
 }
 function showPresets(){
   dialog('장비 구성 프리셋',d=>{
@@ -315,7 +338,7 @@ function applyPreset(tripId){
       const old=tripPrep(tripId).gear;
       if(Object.keys(old).length&&!confirm('이번 일정의 장비 구성을 선택한 프리셋으로 교체할까요?'))return;
       const next={};let adjusted=0;for(const[id,q]of Object.entries(p.entries)){const g=gearData.items.find(x=>x.id===id);if(!g){adjusted++;continue;}const quantity=Math.min(q,g.quantity||1);if(quantity!==q)adjusted++;next[id]={quantity,packed:old[id]?.quantity===quantity&&!!old[id]?.packed};}
-      tripPrep(tripId,true).gear=next;persistExtra();d.close();renderPrep();if(adjusted)showToast('삭제된 장비와 보유 수량 변경을 반영했습니다.');
+      if(!saveTripGear(tripId,next))return;d.close();renderPrep();if(adjusted)showToast('삭제된 장비와 보유 수량 변경을 반영했습니다.');
     })));
   });
 }
@@ -335,15 +358,15 @@ function renderPrep(){
   const weather=element('div','cm-weather');weather.setAttribute('aria-label','캠핑 날씨');hero.append(weather);loadPrepWeather(trip,weather);root.append(hero);
   const gear=section('이번에 가져갈 장비');gear.classList.add('cm-prep-gear');gear.append(button('장비 · 가져갈 수량 선택',()=>{
     const quantities=Object.fromEntries(gearEntries.map(([id,v])=>[id,v.quantity]));
-    gearPicker('이번 일정 장비 선택',quantities,entries=>{const next={};for(const[id,quantity]of Object.entries(entries))next[id]={quantity,packed:prep.gear[id]?.quantity===quantity&&!!prep.gear[id]?.packed};const p=tripPrep(trip.id,true),previous=clone(p.gear);p.gear=next;if(!persistExtra()){p.gear=previous;showToast('장비 선택을 저장하지 못했습니다.');return;}renderPrep();showToast('이번 일정 장비 선택을 기기에 저장했습니다.');});
+    gearPicker('이번 일정 장비 선택',quantities,entries=>{const next={};for(const[id,quantity]of Object.entries(entries))next[id]={quantity,packed:prep.gear[id]?.quantity===quantity&&!!prep.gear[id]?.packed};if(!saveTripGear(trip.id,next))return;renderPrep();showToast('이번 일정 장비를 저장했습니다.');});
   }),button('프리셋 적용',()=>applyPreset(trip.id)),button('프리셋 관리',showPresets));
   if(!gearEntries.length)gear.append(empty('필요한 장비만 선택하세요. 보유 목록은 그대로 유지됩니다.'));
   for(const[id,entry]of gearEntries){const item=gearData.items.find(x=>x.id===id);
     const row=element('div','cm-check-row'),label=element('label');const check=element('input');check.type='checkbox';check.checked=!!entry.packed;check.disabled=!item;
-    check.onchange=()=>{tripPrep(trip.id,true).gear[id].packed=check.checked;persistExtra();renderPrep();};
+    check.onchange=()=>{const next=clone(tripPrep(trip.id,true).gear);next[id].packed=check.checked;if(saveTripGear(trip.id,next))renderPrep();};
     label.append(check,document.createTextNode((item?item.name:'삭제된 장비')+' × '+entry.quantity));
     row.append(label);if(!item||entry.quantity>(item.quantity||1))row.append(element('span','cm-warning',item?'보유 수량 확인':'목록에서 제거 필요'));
-    row.append(button('빼기',()=>{delete tripPrep(trip.id,true).gear[id];persistExtra();renderPrep();}));gear.append(row);
+    row.append(button('빼기',()=>{const next=clone(tripPrep(trip.id,true).gear);delete next[id];if(saveTripGear(trip.id,next))renderPrep();}));gear.append(row);
   }
   const missing=section('추가로 필요한 장비');missing.classList.add('cm-prep-missing-gear');
   missing.append(button('+ 없는 장비 메모',()=>dialog('필요한 장비 추가',d=>{
