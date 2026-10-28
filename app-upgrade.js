@@ -614,7 +614,7 @@ for(const view of ['map','prep','gear','records','food','favorites','fuel']){
 }
 const more=button('',()=>dialog('더보기',d=>{
   d.classList.add('cm-more-dialog');d.append(empty('캠핑의 나머지 즐거움도 한곳에서.'));
-  for(const view of ['food','favorites','fuel']){const b=button('',()=>{d.close();if(view==='fuel'){switchView('map');toggleFuelLayer();}else switchView(view);},'cm-more-option');b.innerHTML=uiIcon(view)+'<span><strong>'+navNames[view]+'</strong><small>'+({food:'식단과 메뉴 계획',favorites:'다시 가고 싶은 캠핑장',fuel:'주변 등유 가격 확인'}[view])+'</small></span><span aria-hidden="true">›</span>';d.append(b);}
+  for(const view of ['food','favorites']){const b=button('',()=>{d.close();switchView(view);},'cm-more-option');b.innerHTML=uiIcon(view)+'<span><strong>'+navNames[view]+'</strong><small>'+({food:'식단과 메뉴 계획',favorites:'다시 가고 싶은 캠핑장',fuel:'주변 등유 가격 확인'}[view])+'</small></span><span aria-hidden="true">›</span>';d.append(b);}
 }),'sidebar-btn cm-more-nav');more.id='sidebar-btn-more';more.setAttribute('aria-label','더보기');more.innerHTML='<span class="sidebar-icon">'+uiIcon('more')+'</span><span>더보기</span>';sidebar.append(more);
 const gearPanel=$('#view-gear');
 const addForm=$('#gear-name-input').parentElement;
