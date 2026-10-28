@@ -92,7 +92,7 @@ pushStateToServer = async function() {
     const {r,data}=await requestJSON('/api/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({protocol:2,changes,backupLabel:pendingBackup||backupLabel})});
     if(r.status===409&&data.state){conflictState={remote:normalizeState(data.state),changes:diff(base,collect())};status('동시 수정 · 확인 필요','error');return;}
     if(!r.ok)throw Error(data.error||'저장 실패');
-    const during=diff(sent,collect());const merged=applyChanges(normalizeState(data.state),during);
+    const during=diff(sent,collect());const merged=applyChanges(normalizeState(data.state),during,true);
     if(merged.conflicts.length){conflictState={remote:normalizeState(data.state),changes:during};status('동시 수정 · 확인 필요','error');return;}
     const acknowledged=normalizeState(data.state);
     storeBase(acknowledged);installState(merged.state);backupLabel='';pendingBackup='';writeLocal('campmap_backup_pending_v2','');
@@ -290,6 +290,8 @@ function saveTripGear(tripId,gear){
     return false;
   }
   debouncedSync();
+  // An in-flight POST must not suppress a second save; the completion path
+  // compares its sent snapshot with the latest state and queues the delta.
   return true;
 }
 function showPresets(){
