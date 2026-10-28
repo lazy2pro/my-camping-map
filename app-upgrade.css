@@ -123,3 +123,23 @@ body.cm-duo-wide[data-view="map"]:has(#bottom-sheet.active) .gps-btn{right:calc(
  .cm-gear-row-actions{margin-top:7px}
  .cm-pick-row{font-size:11px;gap:7px}
 }
+
+/* More sheet: keep the entire panel within the visual viewport on iPhone Duo. */
+.cm-more-dialog{
+  box-sizing:border-box;
+  position:fixed;
+  top:auto;
+  bottom:calc(88px + env(safe-area-inset-bottom));
+  margin:0 auto !important;
+  max-height:calc(100dvh - 110px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding-bottom:calc(20px + env(safe-area-inset-bottom));
+}
+.cm-more-dialog .cm-section{margin-bottom:8px}
+@media(max-height:720px){
+  .cm-more-dialog{bottom:calc(74px + env(safe-area-inset-bottom));max-height:calc(100dvh - 94px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+  .cm-more-dialog .cm-more-option{padding:12px 16px;margin:8px 0}
+  .cm-more-dialog .cm-section{padding:14px}
+}
