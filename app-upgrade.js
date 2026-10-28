@@ -94,7 +94,8 @@ pushStateToServer = async function() {
     if(!r.ok)throw Error(data.error||'저장 실패');
     const during=diff(sent,collect());const merged=applyChanges(normalizeState(data.state),during);
     if(merged.conflicts.length){conflictState={remote:normalizeState(data.state),changes:during};status('동시 수정 · 확인 필요','error');return;}
-    storeBase(normalizeState(data.state));installState(merged.state);backupLabel='';pendingBackup='';writeLocal('campmap_backup_pending_v2','');
+    const acknowledged=normalizeState(data.state);
+    storeBase(acknowledged);installState(merged.state);backupLabel='';pendingBackup='';writeLocal('campmap_backup_pending_v2','');
     retryCount=0;status('저장 완료');refreshAll();
     if(during.length)debouncedSync();
   } catch(e){status('저장 재시도 필요 · 누르면 재시도','error');scheduleRetry();}
@@ -266,8 +267,7 @@ function tripPrep(id,create=false){
   const p=extra.trips[id]||{gear:{},shopping:[]};
   // Gear uses the same per-trip bucket and persistence path as meal plans.
   const foodBucket=foodData.trips[id];
-  if(foodBucket?.gear && Object.keys(foodBucket.gear).length) p.gear=foodBucket.gear;
-  else if(foodBucket?.gear && !Object.keys(p.gear||{}).length) p.gear=foodBucket.gear;
+  if(foodBucket && Object.prototype.hasOwnProperty.call(foodBucket,'gear')) p.gear=foodBucket.gear||{};
   return p;
 }
 function saveTripGear(tripId,gear){
@@ -284,7 +284,11 @@ function saveTripGear(tripId,gear){
     return false;
   }
   const p=tripPrep(tripId,true);p.gear=clone(gear);
-  writeLocal('campmap_extra_v2',extra);
+  if(!writeLocal('campmap_extra_v2',extra)){
+    if(previous===undefined)delete bucket.gear;else bucket.gear=previous;
+    saveFoodData(foodData,true);
+    return false;
+  }
   debouncedSync();
   return true;
 }
