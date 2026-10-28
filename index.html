@@ -3137,6 +3137,12 @@ function addUpcomingRecord() {
         recordsData.upcoming.pop();
         return;
     }
+    // If the selected dates have already passed, show the saved trip in History immediately.
+    const archived = archivePastTrips();
+    if (archived) {
+        activeRecordsTab = 'history';
+        alert('종료일이 지난 일정이라 지난 기록에 저장했습니다.');
+    }
     document.getElementById('upcoming-title-input').value = '';
     document.getElementById('upcoming-start-input').value = '';
     document.getElementById('upcoming-end-input').value = '';
