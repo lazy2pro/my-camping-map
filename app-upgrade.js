@@ -51,7 +51,7 @@ initialSync = async function() {
   try {
     const {r,data}=await requestJSON('/api/sync');if(!r.ok)throw Error(data.error||'연결 실패');
     const remote=normalizeState(data.state||{});
-    const changes=diff(base||bootSnapshot,collect());
+    const changes=diff(base || (data.state ? bootSnapshot : normalizeState({})),collect());
     const merged=applyChanges(remote,changes);
     if(merged.conflicts.length){conflictState={remote,changes};status('동시 수정 · 확인 필요','error');}
     else { installState(merged.state);storeBase(remote);status(changes.length?'저장 대기…':'저장 완료'); }
@@ -162,8 +162,12 @@ deleteGearItem=function(id){
 };
 function editGear(item) {
   dialog('장비 수정',d=>{
-    const fields=[field('분류','text',item.category),field('제조사','text',item.manufacturer),field('모델명','text',item.name),field('단가 (원)','number',item.price),field('보유 수량','number',item.quantity||1),field('중고가 (해당 장비 전체, 원)','number',item.usedPrice)];
-    fields.forEach(f=>d.append(f.wrap));fields[3].input.min=0;fields[4].input.min=1;fields[5].input.min=0;
+    const fields=[field('분류','text',item.category),field('제조사','text',item.manufacturer),field('모델명','text',item.name),field('단가 (원)','number',item.price),field('보유 수량','text',item.quantity||1),field('중고가 (해당 장비 전체, 원)','number',item.usedPrice)];
+    fields.forEach(f=>d.append(f.wrap));fields[3].input.min=0;fields[5].input.min=0;
+    fields[4].input.readOnly=true;fields[4].input.inputMode='none';
+    const qtyControls=element('div','cm-stepper');
+    qtyControls.append(button('−',()=>{fields[4].input.value=String(Math.max(1,Number(fields[4].input.value||1)-1));}),button('+',()=>{fields[4].input.value=String(Number(fields[4].input.value||1)+1);}));
+    fields[4].wrap.append(qtyControls);
     d.append(button('변경 저장',()=>{
       const v=fields.map(f=>f.input.value.trim());if(!v[2]||!Number.isInteger(Number(v[4]))||Number(v[4])<1||[3,5].some(i=>v[i]&&(!Number.isFinite(Number(v[i]))||Number(v[i])<0))){showToast('모델명과 올바른 가격·수량을 입력해 주세요.');return;}
       const target=gearData.items.find(x=>x.id===item.id);if(!target){showToast('장비가 삭제되었습니다.');return;}
