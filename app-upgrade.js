@@ -51,11 +51,22 @@ initialSync = async function() {
   try {
     const {r,data}=await requestJSON('/api/sync');if(!r.ok)throw Error(data.error||'연결 실패');
     const remote=normalizeState(data.state||{});
-    const changes=diff(base || bootSnapshot,collect());
-    // Preserve additions made before initial sync completed, even if the server has older data.
+    const local=collect();
+    const changes=diff(base || bootSnapshot,local);
+    const serverSnapshot=clone(remote);
+    if (!base) {
+      const union=(serverItems=[],localItems=[])=>{
+        const entries=new Map();
+        for(const item of serverItems)if(item?.id)entries.set(item.id,item);
+        for(const item of localItems)if(item?.id&&!entries.has(item.id))entries.set(item.id,item);
+        return [...entries.values()];
+      };
+      remote.records.upcoming=union(remote.records.upcoming,local.records.upcoming);
+      remote.records.history=union(remote.records.history,local.records.history);
+    }
     const merged=applyChanges(remote,changes);
     if(merged.conflicts.length){conflictState={remote,changes};status('동시 수정 · 확인 필요','error');}
-    else { installState(merged.state);storeBase(remote);status(changes.length?'저장 대기…':'저장 완료'); }
+    else { installState(merged.state);storeBase(serverSnapshot);status(diff(serverSnapshot,merged.state).length?'저장 대기…':'저장 완료'); }
     ready=true;retryCount=0;refreshAll();
   } catch { status(navigator.onLine?'연결 실패 · 변경사항 보관 중':'오프라인 · 기기에 저장','pending');scheduleRetry(); }
   finally {syncing=false;}
