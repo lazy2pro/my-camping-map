@@ -24,6 +24,23 @@ function empty(text) { return element('p','cm-muted',text); }
 let extra = {presets:[],trips:{},recipes:[],favorites:[],...readLocal('campmap_extra_v2',{})};
 function collect() { return clone(normalizeState({food:foodData,foodPresets,records:recordsData,gear:gearData,extra})); }
 function persistExtra() { if(!writeLocal('campmap_extra_v2',extra))return false; debouncedSync(); return true; }
+function preserveOwnedGear(state) {
+  const incoming=normalizeState(state);
+  const journal=readLocal('campmap_owned_gear_journal_v1',{});
+  const serverIds=new Set((incoming.gear.items||[]).map(x=>String(x.id)));
+  for(const [id,item] of Object.entries(journal)){
+    if(serverIds.has(String(id))){delete journal[id];continue;}
+    if(item?.id)incoming.gear.items.push(clone(item));
+  }
+  writeLocal('campmap_owned_gear_journal_v1',journal);
+  return incoming;
+}
+function recordOwnedGearChanges(){
+  const journal=readLocal('campmap_owned_gear_journal_v1',{});
+  const serverIds=new Set((base?.gear?.items||[]).map(x=>String(x.id)));
+  for(const item of gearData.items||[])if(item?.id&&!serverIds.has(String(item.id)))journal[item.id]=clone(item);
+  writeLocal('campmap_owned_gear_journal_v1',journal);
+}
 function preserveTripGear(state) {
   const incoming=normalizeState(state);
   const saved=readLocal('campmap_trip_gear_journal_v1',{});
@@ -43,10 +60,16 @@ function preserveTripGear(state) {
   return incoming;
 }
 function installState(state) {
-  const s = preserveTripGear(state); foodData=s.food;foodPresets=s.foodPresets;recordsData=s.records;gearData=s.gear;extra=s.extra;
+  const s = preserveTripGear(preserveOwnedGear(state)); foodData=s.food;foodPresets=s.foodPresets;recordsData=s.records;gearData=s.gear;extra=s.extra;
   saveFoodData(foodData,true);saveFoodPresets(foodPresets,true);saveRecordsData(recordsData,true);saveGearData(gearData,true);writeLocal('campmap_extra_v2',extra);
 }
 const bootSnapshot=collect();
+const originalSaveGearData=saveGearData;
+saveGearData=function(...args){
+  const result=originalSaveGearData.apply(this,args);
+  if(!args[1])recordOwnedGearChanges();
+  return result;
+};
 let base = readLocal('campmap_sync_base_v2', null);
 let ready=false, syncing=false, retryTimer, conflictState=null, backupLabel='', retryCount=0;
 let pendingBackup=readLocal('campmap_backup_pending_v2','');
@@ -138,7 +161,7 @@ function showConflict() {
 }
 async function pullRemote() {
   if(!ready||syncing||conflictState||document.hidden||!navigator.onLine||diff(base,collect()).length)return;
-  try {const {r,data}=await requestJSON('/api/sync');if(r.ok&&data.state&&!diff(base,collect()).length){storeBase(normalizeState(data.state));installState(base);refreshAll();status('저장 완료');}}catch{}
+  try {const {r,data}=await requestJSON('/api/sync');if(r.ok&&data.state&&!diff(base,collect()).length){const next=normalizeState(data.state);storeBase(next);installState(next);refreshAll();status('저장 완료');}}catch{}
 }
 window.addEventListener('online',()=>pushStateToServer());
 window.addEventListener('offline',()=>status('오프라인 · 기기에 저장','pending'));
