@@ -23,7 +23,7 @@ function section(title) { const s=element('section','cm-section'); s.append(elem
 function empty(text) { return element('p','cm-muted',text); }
 let extra = {presets:[],trips:{},recipes:[],favorites:[],...readLocal('campmap_extra_v2',{})};
 function collect() { return clone(normalizeState({food:foodData,foodPresets,records:recordsData,gear:gearData,extra})); }
-function persistExtra() { writeLocal('campmap_extra_v2',extra); debouncedSync(); }
+function persistExtra() { if(!writeLocal('campmap_extra_v2',extra))return false; debouncedSync(); return true; }
 function installState(state) {
   const s = normalizeState(state); foodData=s.food;foodPresets=s.foodPresets;recordsData=s.records;gearData=s.gear;extra=s.extra;
   saveFoodData(foodData,true);saveFoodPresets(foodPresets,true);saveRecordsData(recordsData,true);saveGearData(gearData,true);writeLocal('campmap_extra_v2',extra);
@@ -392,13 +392,15 @@ function generateShopping(trip){
 }
 function renderShopping(trip){
   const p=tripPrep(trip.id),s=section('장보기 목록');s.classList.add('cm-prep-shopping');s.append(button('식단에서 장보기 생성 · 갱신',()=>generateShopping(trip)),button('구매 항목 직접 추가',()=>dialog('구매 항목 추가',d=>{
-    const name=field('구매할 항목'),q=field('수량','number',1),unit=field('단위','text','개');q.input.min='0.001';q.input.step='any';d.append(name.wrap,q.wrap,unit.wrap);
-    d.append(button('추가',()=>{if(!name.input.value.trim()||!Number.isFinite(Number(q.input.value))||Number(q.input.value)<=0){showToast('항목과 수량을 확인해 주세요.');return;}tripPrep(trip.id,true).shopping.push({id:uid(),name:name.input.value.trim(),quantity:Number(q.input.value),unit:unit.input.value.trim(),owned:false,bought:false,generated:false});persistExtra();d.close();renderPrep();}));
+    const name=field('구매할 항목'),q=field('수량','number',1),unit=field('단위','text','개'),memo=field('메모 (선택)','textarea');q.input.min='0.001';q.input.step='any';d.append(name.wrap,q.wrap,unit.wrap,memo.wrap);
+    d.append(button('추가',()=>{if(!name.input.value.trim()||!Number.isFinite(Number(q.input.value))||Number(q.input.value)<=0){showToast('항목과 수량을 확인해 주세요.');return;}tripPrep(trip.id,true).shopping.push({id:uid(),name:name.input.value.trim(),quantity:Number(q.input.value),unit:unit.input.value.trim(),memo:memo.input.value.trim(),owned:false,bought:false,generated:false});persistExtra();d.close();renderPrep();}));
   })));
   if(!p.shopping?.length)s.append(empty('식단을 정한 뒤 생성하거나 직접 추가하세요.'));
   for(const item of p.shopping||[]){
     const row=element('div','cm-shopping-item');row.append(element('strong','',item.name+' · '+Number(item.quantity.toFixed(3))+(item.unit||'')));
     if(item.sources?.length)row.append(empty(item.sources.join(' / ')));
+    if(item.memo)row.append(element('p','cm-muted','메모 · '+item.memo));
+    row.append(button('메모',()=>dialog('항목 메모',d=>{const m=field('메모','textarea',item.memo||'');d.append(m.wrap,button('저장',()=>{const target=tripPrep(trip.id,true).shopping.find(x=>x.id===item.id);if(target)target.memo=m.input.value.trim();persistExtra();d.close();renderPrep();}));})));
     for(const[key,label]of [['owned','이미 보유'],['bought','구매 완료']]){const f=field(label,'checkbox');f.input.checked=!!item[key];f.input.onchange=()=>{const target=tripPrep(trip.id,true).shopping.find(x=>x.id===item.id);if(target)target[key]=f.input.checked;persistExtra();renderPrep();};row.append(f.wrap);}
     row.append(button('제거',()=>{const list=tripPrep(trip.id,true).shopping;const old=clone(list);tripPrep(trip.id,true).shopping=list.filter(x=>x.id!==item.id);persistExtra();renderPrep();showToast('구매 항목 제거됨',()=>{tripPrep(trip.id,true).shopping=old;persistExtra();renderPrep();});}));s.append(row);
   }return s;
