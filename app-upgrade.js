@@ -329,25 +329,48 @@ function gearPicker(title,entries,onSave,{name=null}={}){
     let nameField;if(name!==null){nameField=field('구성 이름','text',name);d.append(nameField.wrap);}
     const search=field('장비 찾기','search');d.append(search.wrap,empty('− / + 버튼을 눌러 수량을 선택하세요. 보유 수량을 초과할 수 없습니다.'));
     const chosen={...entries};const list=element('div','cm-picker');d.append(list);
-    function render(){list.replaceChildren();const q=search.input.value.toLowerCase();gearData.items.filter(x=>(x.name+' '+x.manufacturer+' '+x.category).toLowerCase().includes(q)).forEach(item=>{
-      const row=element('div','cm-pick-row');row.append(element('span','',item.manufacturer+' '+item.name+' · 보유 '+(item.quantity||1)));
-      const controls=element('div','cm-quantity-stepper');
-      controls.style.cssText='display:flex;align-items:center;gap:10px;flex-shrink:0';
-      const count=element('output','',String(chosen[item.id]||0));
-      count.style.cssText='min-width:22px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums';
-      const adjust=delta=>{
-        const value=Math.max(0,Math.min(item.quantity||1,(chosen[item.id]||0)+delta));
-        if(value)chosen[item.id]=value;else delete chosen[item.id];
-        count.textContent=String(value);
-        minus.disabled=value===0;plus.disabled=value>=(item.quantity||1);
-      };
-      const minus=button('−',()=>adjust(-1),'cm-button');
-      const plus=button('+',()=>adjust(1),'cm-button');
-      for(const b of [minus,plus]){b.style.cssText='min-width:40px;min-height:44px;padding:8px 12px;font-size:22px';}
-      minus.setAttribute('aria-label',item.name+' 수량 줄이기');plus.setAttribute('aria-label',item.name+' 수량 늘리기');
-      minus.disabled=!(chosen[item.id]||0);plus.disabled=(chosen[item.id]||0)>=(item.quantity||1);
-      controls.append(minus,count,plus);row.append(controls);list.append(row);
-    });}
+    const expandedCategories=new Set();
+    function render(){
+      list.replaceChildren();
+      const q=search.input.value.trim().toLowerCase();
+      const matches=gearData.items.filter(x=>(x.name+' '+(x.manufacturer||'')+' '+(x.category||'')).toLowerCase().includes(q));
+      const groups=new Map();
+      for(const item of matches){const cat=item.category||'미분류';if(!groups.has(cat))groups.set(cat,[]);groups.get(cat).push(item);}
+      for(const [cat,items] of [...groups].sort(([a],[b])=>a.localeCompare(b,'ko'))){
+        const group=element('div','cm-picker-category');
+        const selected=items.reduce((sum,item)=>sum+(chosen[item.id]||0),0);
+        const open=!!q||expandedCategories.has(cat);
+        const header=button('',()=>{
+          if(expandedCategories.has(cat))expandedCategories.delete(cat);else expandedCategories.add(cat);
+          render();
+        },'cm-picker-category-header');
+        header.setAttribute('aria-expanded',String(open));
+        header.innerHTML='<span>'+esc(cat)+'</span><small>'+items.length+'종 · 선택 '+selected+'개</small><span aria-hidden="true">'+(open?'−':'+')+'</span>';
+        group.append(header);
+        if(open)for(const item of items){
+          const row=element('div','cm-pick-row');
+          row.append(element('span','',((item.manufacturer||'')+' '+item.name).trim()+' · 보유 '+(item.quantity||1)));
+          const controls=element('div','cm-quantity-stepper');
+          const count=element('output','',String(chosen[item.id]||0));
+          const adjust=delta=>{
+            const value=Math.max(0,Math.min(item.quantity||1,(chosen[item.id]||0)+delta));
+            if(value)chosen[item.id]=value;else delete chosen[item.id];
+            count.textContent=String(value);
+            minus.disabled=value===0;plus.disabled=value>=(item.quantity||1);
+            header.querySelector('small').textContent=items.length+'종 · 선택 '+items.reduce((sum,x)=>sum+(chosen[x.id]||0),0)+'개';
+          };
+          const minus=button('−',()=>adjust(-1),'cm-button');
+          const plus=button('+',()=>adjust(1),'cm-button');
+          minus.setAttribute('aria-label',item.name+' 수량 줄이기');
+          plus.setAttribute('aria-label',item.name+' 수량 늘리기');
+          minus.disabled=!(chosen[item.id]||0);
+          plus.disabled=(chosen[item.id]||0)>=(item.quantity||1);
+          controls.append(minus,count,plus);row.append(controls);group.append(row);
+        }
+        list.append(group);
+      }
+      if(!matches.length)list.append(empty('검색 결과가 없습니다.'));
+    }
     search.input.oninput=render;render();
     d.append(button('구성 저장',()=>{if(nameField&&!nameField.input.value.trim()){showToast('구성 이름을 입력해 주세요.');return;}for(const [id,q]of Object.entries(chosen)){const item=gearData.items.find(x=>x.id===id);if(!item||q>(item.quantity||1)){showToast('삭제되었거나 수량이 줄어든 장비를 다시 확인해 주세요.');return;}}onSave(chosen,nameField?.input.value.trim());d.close();}));
   });
