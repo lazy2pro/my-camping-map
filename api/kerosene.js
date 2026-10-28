@@ -285,13 +285,13 @@ export default async function handler(req, res) {
           id: getCI(it, 'UNI_ID'),
           name: getCI(it, 'OS_NM'),
           brand: BRAND_NAMES[getCI(it, 'POLL_DIV_CO')] || getCI(it, 'POLL_DIV_CO') || '',
-          price: Number(getCI(it, 'PRICE')),
+          price: (() => { const raw = getCI(it, 'PRICE'); return raw == null || String(raw).trim() === '' ? null : Number(raw); })(),
           distance: Number(getCI(it, 'DISTANCE')),
           lat: coord.lat,
           lng: coord.lng,
         };
       })
-      .filter(Boolean);
+      .filter(station => station && Number.isFinite(station.price) && station.price > 0);
 
     const payload = { stations };
     if (isDebug) {
