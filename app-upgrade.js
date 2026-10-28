@@ -24,8 +24,26 @@ function empty(text) { return element('p','cm-muted',text); }
 let extra = {presets:[],trips:{},recipes:[],favorites:[],...readLocal('campmap_extra_v2',{})};
 function collect() { return clone(normalizeState({food:foodData,foodPresets,records:recordsData,gear:gearData,extra})); }
 function persistExtra() { if(!writeLocal('campmap_extra_v2',extra))return false; debouncedSync(); return true; }
+function preserveTripGear(state) {
+  const incoming=normalizeState(state);
+  const saved=readLocal('campmap_trip_gear_journal_v1',{});
+  for(const [tripId,entry] of Object.entries(saved)){
+    if(!entry || !entry.gear)continue;
+    const serverGear=incoming.food.trips?.[tripId]?.gear;
+    if(equal(serverGear,entry.gear)){
+      delete saved[tripId];
+      continue;
+    }
+    if(!incoming.food.trips[tripId])incoming.food.trips[tripId]={days:{}};
+    incoming.food.trips[tripId].gear=clone(entry.gear);
+    if(!incoming.extra.trips[tripId])incoming.extra.trips[tripId]={gear:{},shopping:[]};
+    incoming.extra.trips[tripId].gear=clone(entry.gear);
+  }
+  writeLocal('campmap_trip_gear_journal_v1',saved);
+  return incoming;
+}
 function installState(state) {
-  const s = normalizeState(state); foodData=s.food;foodPresets=s.foodPresets;recordsData=s.records;gearData=s.gear;extra=s.extra;
+  const s = preserveTripGear(state); foodData=s.food;foodPresets=s.foodPresets;recordsData=s.records;gearData=s.gear;extra=s.extra;
   saveFoodData(foodData,true);saveFoodPresets(foodPresets,true);saveRecordsData(recordsData,true);saveGearData(gearData,true);writeLocal('campmap_extra_v2',extra);
 }
 const bootSnapshot=collect();
@@ -289,6 +307,9 @@ function saveTripGear(tripId,gear){
     saveFoodData(foodData,true);
     return false;
   }
+  const journal=readLocal('campmap_trip_gear_journal_v1',{});
+  journal[tripId]={gear:clone(gear),at:Date.now()};
+  writeLocal('campmap_trip_gear_journal_v1',journal);
   debouncedSync();
   // An in-flight POST must not suppress a second save; the completion path
   // compares its sent snapshot with the latest state and queues the delta.
