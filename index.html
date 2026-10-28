@@ -2768,8 +2768,17 @@ function loadRecordsData() {
     }
 }
 function saveRecordsData(data, skipSync) {
-    try { localStorage.setItem(RECORDS_STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+    try {
+        const serialized = JSON.stringify(data);
+        localStorage.setItem(RECORDS_STORAGE_KEY, serialized);
+        if (localStorage.getItem(RECORDS_STORAGE_KEY) !== serialized) throw new Error('저장 확인 실패');
+    } catch (e) {
+        console.error('캠핑 일정 로컬 저장 실패:', e);
+        if (!skipSync) alert('일정을 기기에 저장하지 못했습니다. 저장 공간 및 Safari 설정을 확인해 주세요.');
+        return false;
+    }
     if (!skipSync) debouncedSync();
+    return true;
 }
 let recordsData = loadRecordsData();
 
@@ -3124,7 +3133,10 @@ function addUpcomingRecord() {
         title, startDate, endDate, site, note,
         lat: pendingUpcomingLat, lng: pendingUpcomingLng,
     });
-    saveRecordsData(recordsData);
+    if (!saveRecordsData(recordsData)) {
+        recordsData.upcoming.pop();
+        return;
+    }
     document.getElementById('upcoming-title-input').value = '';
     document.getElementById('upcoming-start-input').value = '';
     document.getElementById('upcoming-end-input').value = '';
