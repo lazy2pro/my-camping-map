@@ -895,3 +895,36 @@ body:not([data-view="map"]) .cm-map-mode { display: none !important; }
   .cm-map-mode, body.has-next-camp .cm-map-mode { top: calc(env(safe-area-inset-top) + 228px) !important; right: 25px !important; }
   .gps-btn, body.has-next-camp .gps-btn { top: calc(env(safe-area-inset-top) + 284px) !important; right: 25px !important; }
 }
+
+/* 등유 가격 목록: 좁은 화면에서는 오른쪽 세로 목록 대신 탭 바 위 가로 카드 줄 */
+@media (max-width: 760px) {
+  #fuel-price-list {
+    top: auto !important; right: 0 !important; left: 0 !important; width: auto !important; max-width: none !important;
+    bottom: calc(80px + env(safe-area-inset-bottom)) !important; height: auto !important; max-height: none !important;
+    padding: 6px 14px 10px !important; margin: 0 !important; gap: 8px;
+    overflow-x: auto !important; overflow-y: hidden !important; scroll-snap-type: x proximity;
+    background: transparent !important; border: 0 !important; box-shadow: none !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important; scrollbar-width: none;
+  }
+  #fuel-price-list::-webkit-scrollbar { display: none; }
+  #fuel-price-list.active { display: flex !important; }
+  #fuel-price-list li {
+    flex: 0 0 168px; scroll-snap-align: start;
+    display: flex !important; flex-direction: column !important; align-items: stretch !important; gap: 6px !important;
+    padding: 10px 12px !important; border: 0 !important; border-radius: 18px !important;
+    background: var(--glass-bg) !important; box-shadow: var(--shadow) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(1.8); backdrop-filter: blur(24px) saturate(1.8);
+  }
+  #fuel-price-list li.selected { background: #fff !important; box-shadow: 0 0 0 2px #0a7aff, var(--shadow) !important; }
+  .fuel-list-top { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+  .fuel-list-rank { font-size: 12px; color: var(--ink-3); }
+  .fuel-list-price { font-size: 19px !important; font-weight: 700 !important; color: #0a7aff !important; letter-spacing: -.02em; }
+  #fuel-price-list li:first-child { margin-left: 14px; }
+  #fuel-price-list li:last-child { margin-right: 14px; }
+  .fuel-list-name, .fuel-list-sub { display: block !important; }
+  .fuel-list-name { font-size: 13px !important; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fuel-list-sub { font-size: 11px !important; color: var(--ink-2) !important; }
+  .fuel-list-tmap-btn { align-self: flex-start; padding: 5px 12px !important; border-radius: 12px !important; font-size: 12px !important; }
+  /* 목록이 떠 있는 동안 동기화 표시는 숨김 */
+  body:has(#fuel-price-list.active) .cm-sync { display: none !important; }
+}
