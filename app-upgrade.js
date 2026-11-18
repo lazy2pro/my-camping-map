@@ -211,13 +211,16 @@ function renderGearResults(root,results) {
     const open=term||categoryFilter||expandedGearCategories.has(cat);
     const head=button('',()=>{if(expandedGearCategories.has(cat))expandedGearCategories.delete(cat);else expandedGearCategories.add(cat);renderGearView();},'gear-category-header');head.setAttribute('aria-expanded',String(!!open));head.innerHTML='<span class="cm-category-icon" aria-hidden="true">'+categorySymbol(cat)+'</span><span class="cm-category-title"><strong>'+esc(cat)+'</strong><small>'+list.length+'종의 장비</small></span><span class="cm-category-total">'+money(list.reduce((s,x)=>s+Number(x.price||0)*(x.quantity||1),0))+'</span><span class="cm-chevron" aria-hidden="true">'+(open?'−':'+')+'</span>';
     group.append(head);
+    const grid=element('div','cm-gear-grid');if(open)group.append(grid);
     if(open)list.forEach(item=>{
       const card=element('div','item-card gear-card');const info=element('div','gear-card-info');
-      info.append(element('div','cm-muted',item.manufacturer),element('div','gear-name',item.name));
-      info.append(element('div','gear-price',money(item.price)+' × '+(item.quantity||1)+' = '+money(Number(item.price||0)*(item.quantity||1))));
+      info.append(element('div','cm-muted gear-maker',item.manufacturer||'제조사 미입력'),element('div','gear-name',item.name));
+      const total=Number(item.price||0)*(item.quantity||1);
+      info.append(element('div','gear-total',item.price?money(total):'가격 미입력'));
+      if(item.price&&(item.quantity||1)>1)info.append(element('div','gear-price',money(item.price)+' × '+(item.quantity||1)));
       if(item.usedPrice!=null)info.append(element('div','cm-muted','중고가 '+money(item.usedPrice)));
       const actions=element('div','cm-row cm-gear-row-actions');const qty=element('div','cm-stepper');qty.append(button('−',()=>changeGearQty(item.id,-1)),element('span','',(item.quantity||1)+'개'),button('+',()=>changeGearQty(item.id,1)));const menu=element('details','cm-tools-menu');const menuTitle=element('summary','','•••');menuTitle.setAttribute('aria-label',item.name+' 장비 관리');menu.append(menuTitle);const menuContent=element('div','cm-tools-content');menuContent.append(button('수정',()=>{menu.open=false;editGear(item);}),button('삭제',()=>deleteGearItem(item.id),'cm-button cm-danger'));menu.append(menuContent);actions.append(qty,menu);
-      info.append(actions);card.append(info);group.append(card);
+      info.append(actions);card.append(info);grid.append(card);
     });results.append(group);
   });
 }
