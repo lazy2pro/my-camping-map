@@ -205,6 +205,11 @@ function renderGearResults(root,results) {
   results.replaceChildren();const term=searchGear.trim().toLowerCase();
   const items=gearData.items.filter(x=>(!categoryFilter||(x.category||'미분류')===categoryFilter)&&(!term||[x.name,x.manufacturer,x.category].join(' ').toLowerCase().includes(term)));
   if(!items.length){results.append(empty('일치하는 장비가 없습니다.'));return;}
+  const trip=nextUpcomingTrip();
+  const banner=element('div','cm-gear-trip');
+  if(trip){const dd=daysUntil(trip.startDate);banner.innerHTML='<strong>'+esc(trip.title||'다음 캠핑')+'</strong><span>'+(dd==null?'날짜 미정':dd>0?'D-'+dd:dd===0?'오늘 출발':'캠핑 중')+' · 타일을 눌러 챙긴 개수를 표시하면 캠핑 준비에도 반영돼요</span>';}
+  else banner.innerHTML='<span>예정된 캠핑이 없어요. 타일을 눌러 챙긴 개수를 표시할 수 있어요.</span>';
+  results.append(banner);
   const groups=Map.groupBy?Map.groupBy(items,x=>x.category||'미분류'):items.reduce((m,x)=>{const k=x.category||'미분류';m.set(k,[...(m.get(k)||[]),x]);return m;},new Map());
   [...groups].sort(([a],[b])=>a.localeCompare(b,'ko')).forEach(([cat,list])=>{
     const group=element('div','gear-category-group');
@@ -221,25 +226,22 @@ function renderGearResults(root,results) {
       info.append(element('div','cm-muted gear-maker',item.manufacturer||'제조사 미입력'),element('div','gear-name',item.name));
       const dots=element('div','gear-dots');
       const paint=()=>{
-        const act=Math.min(qtyN,Number((extra.gearActive||{})[item.id]||0));
+        const act=gearActiveCount(item.id,qtyN);
         card.classList.toggle('on',act>0);card.classList.toggle('full',act>=qtyN);
         dots.replaceChildren(...Array.from({length:qtyN},(_,i)=>element('i',i<act?'lit':'')));
         dots.append(element('span','gear-count',act+'/'+qtyN));
         card.setAttribute('aria-label',item.name+' '+act+'개 챙김, 전체 '+qtyN+'개. 누르면 하나 더 챙김');
       };
       const tap=()=>{
-        extra.gearActive=extra.gearActive||{};
-        const cur=Math.min(qtyN,Number(extra.gearActive[item.id]||0));
-        const next=cur>=qtyN?0:cur+1;
-        if(next)extra.gearActive[item.id]=next;else delete extra.gearActive[item.id];
-        persistExtra();paint();
+        const cur=gearActiveCount(item.id,qtyN);
+        setGearActiveCount(item.id,qtyN,cur>=qtyN?0:cur+1);paint();
         card.classList.remove('bump');void card.offsetWidth;card.classList.add('bump');
       };
       card.addEventListener('click',e=>{if(e.target.closest('details'))return;tap();});
       card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();tap();}});
       const menu=element('details','cm-tools-menu gear-tile-menu');const menuTitle=element('summary','','•••');menuTitle.setAttribute('aria-label',item.name+' 장비 관리');menu.append(menuTitle);
       const menuContent=element('div','cm-tools-content');
-      menuContent.append(button('수량 +1',()=>{menu.open=false;changeGearQty(item.id,1);}),button('수량 −1',()=>{menu.open=false;changeGearQty(item.id,-1);}),button('챙김 초기화',()=>{menu.open=false;if(extra.gearActive)delete extra.gearActive[item.id];persistExtra();paint();}),button('수정',()=>{menu.open=false;editGear(item);}),button('삭제',()=>deleteGearItem(item.id),'cm-button cm-danger'));
+      menuContent.append(button('수량 +1',()=>{menu.open=false;changeGearQty(item.id,1);}),button('수량 −1',()=>{menu.open=false;changeGearQty(item.id,-1);}),button('챙김 초기화',()=>{menu.open=false;setGearActiveCount(item.id,qtyN,0);paint();}),button('수정',()=>{menu.open=false;editGear(item);}),button('삭제',()=>deleteGearItem(item.id),'cm-button cm-danger'));
       menu.append(menuContent);
       info.append(dots);card.append(menu,info);paint();grid.append(card);
     });results.append(group);
@@ -794,3 +796,29 @@ window.addEventListener('focus',renderNextCampCard);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)renderNextCampCard();});
 renderNextCampCard();
 setInterval(renderNextCampCard,60*1000);
+
+
+// ---------- 장비 타일 챙김 ↔ 다음 캠핑 준비 연동 ----------
+// 다음 예정 캠핑이 있으면 그 일정 기준으로 챙긴 개수를 기억하고, 다 챙기면 '캠핑 준비'의 장비 체크도 켠다.
+function gearActiveStore(){
+  const trip=nextUpcomingTrip();
+  if(!trip){extra.gearActive=extra.gearActive||{};return {trip:null,map:extra.gearActive};}
+  extra.gearActiveTrips=extra.gearActiveTrips||{};
+  return {trip,map:(extra.gearActiveTrips[trip.id]=extra.gearActiveTrips[trip.id]||{})};
+}
+function gearActiveCount(id,qtyN){
+  const {trip,map}=gearActiveStore();
+  let n=Math.min(qtyN,Number(map[id]||0));
+  if(trip){const g=tripPrep(trip.id).gear?.[id];if(g?.packed)n=qtyN;else if(g&&n>=qtyN)n=qtyN-1;}
+  return n;
+}
+function setGearActiveCount(id,qtyN,n){
+  const {trip,map}=gearActiveStore();
+  if(n>0)map[id]=n;else delete map[id];
+  persistExtra();
+  if(trip){
+    const gear=clone(tripPrep(trip.id,true).gear||{});
+    if(n>0||gear[id]){gear[id]={quantity:gear[id]?.quantity||qtyN,packed:n>=qtyN};saveTripGear(trip.id,gear);}
+    renderNextCampCard();
+  }
+}
