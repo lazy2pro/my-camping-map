@@ -844,7 +844,8 @@ body.has-next-camp .cm-map-search { top: calc(env(safe-area-inset-top) + 182px) 
 @keyframes cm-sheet-up { from { transform: translateY(40px); opacity: .6; } }
 
 /* 지도를 화면 끝까지 (viewport-fit=cover 와 함께: 상태 표시 영역 밑까지 지도를 깐다) */
-#map { position: fixed; top: 0; left: 0; bottom: 0; width: 100%; height: auto; }
+/* 네이버 지도는 컨테이너에 position:relative 를 직접 넣으므로 !important 와 높이를 명시 */
+#map { position: fixed !important; top: 0; left: 0; width: 100%; height: 100%; }
 
 /* =====================================================================
    지도 버튼: 테슬라 앱처럼 오른쪽 동그란 버튼 세로 줄 (등유 · 직접 검색 · 내 위치)
@@ -886,4 +887,11 @@ body:not([data-view="map"]) .cm-map-mode { display: none !important; }
   body #map-fuel-toggle { display: none !important; }
   .cm-map-mode, body.has-next-camp .cm-map-mode { top: 150px !important; right: 24px !important; }
   .gps-btn, body.has-next-camp .gps-btn { top: 206px !important; right: 24px !important; }
+}
+
+/* 듀오 커버 화면: 동그란 버튼 줄을 오른쪽 위 상태 표시(시계·배터리) 바로 밑에 */
+@media (max-width: 520px) {
+  #map-fuel-toggle, body.has-next-camp #map-fuel-toggle { top: calc(env(safe-area-inset-top) + 172px) !important; right: 25px !important; }
+  .cm-map-mode, body.has-next-camp .cm-map-mode { top: calc(env(safe-area-inset-top) + 228px) !important; right: 25px !important; }
+  .gps-btn, body.has-next-camp .gps-btn { top: calc(env(safe-area-inset-top) + 284px) !important; right: 25px !important; }
 }
