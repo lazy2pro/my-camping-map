@@ -253,7 +253,6 @@ function renderFuelPriceList(stations) {
                 <div class="fuel-list-name">${station.name}</div>
                 <div class="fuel-list-sub">${station.brand || ''}${station.brand ? ' · ' : ''}약 ${Math.round(station.distance)}m</div>
             </div>
-            <a class="fuel-list-tmap-btn">티맵</a>
         `;
         li.addEventListener('mouseenter', () => setFuelSelection(station.id));
         li.addEventListener('click', () => {
@@ -262,7 +261,6 @@ function renderFuelPriceList(stations) {
             suppressNextFuelFetch = true;
             map.setCenter(new naver.maps.LatLng(station.lat, station.lng));
         });
-        li.querySelector('.fuel-list-tmap-btn').href = tmapUrl(station);
         listEl.appendChild(li);
     });
     listEl.classList.add('active');
