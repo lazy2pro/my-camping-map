@@ -842,3 +842,6 @@ body.has-next-camp .cm-map-search { top: calc(env(safe-area-inset-top) + 182px) 
   .cm-toast { bottom: calc(80px + env(safe-area-inset-bottom)) !important; }
 }
 @keyframes cm-sheet-up { from { transform: translateY(40px); opacity: .6; } }
+
+/* 지도를 화면 끝까지 (viewport-fit=cover 와 함께: 상태 표시 영역 밑까지 지도를 깐다) */
+#map { position: fixed; top: 0; left: 0; bottom: 0; width: 100%; height: auto; }
