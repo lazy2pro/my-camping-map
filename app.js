@@ -285,6 +285,13 @@ async function fetchFuelInView() {
 }
 
 function toggleFuelLayer() {
+    // 다른 화면(기록·장비 등)이나 대화상자가 열려 있으면 닫고 지도로 돌아가서 등유를 켠다.
+    document.querySelectorAll('dialog[open]').forEach((d) => d.close());
+    const fromOtherView = document.body.dataset.view && document.body.dataset.view !== 'map';
+    if (fromOtherView) {
+        switchView('map');
+        if (fuelLayerActive) { fetchFuelInView(); return; } // 이미 켜져 있으면 끄지 않고 새로 불러오기만
+    }
     fuelLayerActive = !fuelLayerActive;
     const btn = document.getElementById('sidebar-btn-fuel');
     if (btn) btn.classList.toggle('active', fuelLayerActive);

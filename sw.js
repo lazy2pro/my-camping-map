@@ -1,4 +1,4 @@
-const CACHE='campmap-shell-v13-20261118i';
+const CACHE='campmap-shell-v14-20261118j';
 const SHELL=['/','/index.html','/app.js','/app-upgrade.js','/camp.css','/lib/state-core.mjs','/manifest.webmanifest','/apple-touch-icon.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('campmap-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
