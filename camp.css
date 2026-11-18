@@ -938,3 +938,36 @@ body:not([data-view="map"]) .cm-map-mode { display: none !important; }
 @media (max-width: 520px) {
   .cm-dialog > .cm-row:first-child { padding-right: 76px; }
 }
+
+/* =====================================================================
+   장비: 분류 안의 장비를 카드 격자로
+   ===================================================================== */
+.gear-category-group { background: transparent !important; box-shadow: none !important; border: 0 !important; margin-bottom: 18px !important; }
+.gear-category-header { background: transparent !important; padding: 6px 4px 10px !important; min-height: 0 !important; box-shadow: none !important; }
+.cm-category-title strong { font-size: 17px !important; font-weight: 700 !important; }
+.cm-gear-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; }
+.cm-gear-grid .gear-card {
+  display: flex !important; flex-direction: column; margin: 0 !important; padding: 14px !important;
+  border: 0 !important; border-radius: 18px !important; background: #fff !important; box-shadow: 0 1px 3px rgba(0, 0, 0, .06) !important;
+  min-height: 150px;
+}
+.cm-gear-grid .gear-card-info { display: flex !important; flex-direction: column; gap: 3px; flex: 1; width: 100%; }
+.cm-gear-grid .gear-maker { font-size: 11px !important; color: var(--ink-3) !important; margin: 0 !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-gear-grid .gear-name {
+  font-size: 15px !important; font-weight: 700 !important; line-height: 1.35 !important; color: var(--ink) !important;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: keep-all;
+}
+.cm-gear-grid .gear-total { margin-top: 6px; font-size: 17px; font-weight: 700; letter-spacing: -.02em; color: var(--forest); font-variant-numeric: tabular-nums; }
+.cm-gear-grid .gear-price { margin: 0 !important; font-size: 11px !important; color: var(--ink-2) !important; }
+.cm-gear-grid .cm-gear-row-actions { margin-top: auto !important; padding-top: 10px; display: flex !important; justify-content: space-between !important; align-items: center; gap: 6px !important; }
+.cm-gear-grid .cm-stepper { border: 0 !important; background: var(--fill) !important; border-radius: 12px !important; }
+.cm-gear-grid .cm-stepper .cm-button { min-height: 32px !important; min-width: 32px !important; padding: 0 8px !important; background: transparent !important; }
+.cm-gear-grid .cm-stepper > span { min-width: 30px !important; font-size: 12px !important; font-weight: 600; }
+.cm-gear-grid .cm-tools-menu summary { padding: 6px 8px !important; min-height: 0 !important; background: transparent !important; border: 0 !important; color: var(--ink-3) !important; }
+.cm-gear-grid .cm-tools-content { right: 0; bottom: calc(100% + 4px); top: auto !important; }
+@media (max-width: 380px) { .cm-gear-grid { grid-template-columns: 1fr 1fr; gap: 8px; } .cm-gear-grid .gear-card { padding: 12px !important; } }
+.cm-gear-grid .gear-card, .cm-gear-grid .gear-card-info { text-align: left !important; align-items: stretch; }
+@media (max-width: 760px) {
+  /* 시트 제목은 스크롤해도 위에 붙어 있고, 내용이 비치지 않게 */
+  .view-header { position: sticky !important; top: 0 !important; z-index: 12 !important; background: rgba(242, 242, 247, .96) !important; border-radius: 28px 28px 0 0; }
+}
