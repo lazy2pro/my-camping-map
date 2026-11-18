@@ -928,3 +928,13 @@ body:not([data-view="map"]) .cm-map-mode { display: none !important; }
   /* 목록이 떠 있는 동안 동기화 표시는 숨김 */
   body:has(#fuel-price-list.active) .cm-sync { display: none !important; }
 }
+
+/* 대화상자 닫기: 동그란 버튼, 커버 화면에서는 상태 표시에 가리지 않게 */
+.cm-dialog > .cm-row:first-child { align-items: center; }
+.cm-dialog > .cm-row:first-child > .cm-button {
+  margin: 0 !important; min-height: 34px !important; padding: 0 14px !important;
+  border-radius: 17px !important; background: var(--fill) !important; color: var(--ink) !important; font-size: 13px !important;
+}
+@media (max-width: 520px) {
+  .cm-dialog > .cm-row:first-child { padding-right: 76px; }
+}

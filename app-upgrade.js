@@ -17,7 +17,10 @@ function showToast(message, undo) {
 }
 function dialog(title, build) {
   const d = element('dialog','cm-dialog'); const header=element('div','cm-row');header.append(element('h2','',title),button('닫기',()=>d.close())); d.append(header);
-  d.addEventListener('close',()=>d.remove()); document.body.append(d); build(d); d.showModal(); return d;
+  d.addEventListener('close',()=>d.remove());
+  // 바깥(어두운 배경)을 누르면 닫는다
+  d.addEventListener('click',e=>{const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();});
+  document.body.append(d); build(d); d.showModal(); return d;
 }
 function section(title) { const s=element('section','cm-section'); s.append(element('h3','',title)); return s; }
 function empty(text) { return element('p','cm-muted',text); }
