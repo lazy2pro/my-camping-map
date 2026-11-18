@@ -986,3 +986,28 @@ body:not([data-view="map"]) .cm-map-mode { display: none !important; }
 /* 요약 카드에서도 금액(구입 금액·중고가)은 숨기고 장비 수만 */
 .cm-gear-summary { grid-template-columns: 1fr !important; }
 .cm-gear-summary > div:not(:first-child) { display: none !important; }
+
+/* 장비 타일: 수량만큼 겹쳐 보이고, 누른 만큼 켜짐 */
+.cm-gear-grid { gap: 14px 10px !important; padding: 0 4px 6px 0; }
+.gear-tile { position: relative; cursor: pointer; user-select: none; -webkit-user-select: none; transition: transform .12s, background .2s, box-shadow .2s; }
+.gear-tile:active { transform: scale(.97); }
+.gear-tile.stack-2 { box-shadow: 4px 4px 0 -1px #fff, 4px 4px 0 0 rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.06) !important; }
+.gear-tile.stack-3 { box-shadow: 4px 4px 0 -1px #fff, 4px 4px 0 0 rgba(0,0,0,.06), 8px 8px 0 -1px #fff, 8px 8px 0 0 rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.06) !important; }
+.gear-tile.on { background: #effaf2 !important; }
+.gear-tile.full { background: var(--forest) !important; }
+.gear-tile.full .gear-name, .gear-tile.full .gear-maker, .gear-tile.full .gear-count { color: #fff !important; }
+.gear-tile.full .gear-dots i { background: #fff !important; }
+.gear-tile.stack-2.on, .gear-tile.stack-3.on { --layer: #effaf2; }
+.gear-tile.stack-2.full { box-shadow: 4px 4px 0 -1px #c9ecd3, 0 1px 3px rgba(0,0,0,.06) !important; }
+.gear-tile.stack-3.full { box-shadow: 4px 4px 0 -1px #c9ecd3, 8px 8px 0 -1px #e3f5e8, 0 1px 3px rgba(0,0,0,.06) !important; }
+.gear-tile.bump { animation: gear-bump .22s ease-out; }
+@keyframes gear-bump { 50% { transform: scale(1.04); } }
+.gear-dots { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.gear-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--fill); }
+.gear-dots i.lit { background: var(--forest); }
+.gear-count { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.gear-tile-menu { position: absolute !important; top: 4px; right: 4px; z-index: 2; }
+.gear-tile-menu summary { padding: 2px 6px !important; font-size: 12px !important; background: transparent !important; border: 0 !important; color: var(--ink-3) !important; min-height: 0 !important; }
+.gear-tile.full .gear-tile-menu summary { color: #fff !important; }
+.gear-tile-menu .cm-tools-content { top: 100% !important; bottom: auto !important; right: 0; width: 130px; }
+.gear-tile .gear-card-info { padding-right: 14px; }
