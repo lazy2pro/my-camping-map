@@ -576,7 +576,7 @@ renderCamps=function(items){reconcileMarkers(filterGlamping(items),GREEN_ICON,'o
 addMarkers=function(items,icon){reconcileMarkers(items,icon,icon===ORANGE_ICON?'naver':'official');};
 let manualSearch=readLocal('campmap_manual_search_v2',false),forcedSearch=false,hasSearched=false;
 const mapSearch=button('이 지역 검색',()=>{forcedSearch=true;fetchCampsInView();},'cm-map-search');mapSearch.id='cm-map-search';
-const modeLabel=element('label','cm-map-mode');const modeCheck=element('input');modeCheck.type='checkbox';modeCheck.checked=manualSearch;modeCheck.onchange=()=>{manualSearch=modeCheck.checked;writeLocal('campmap_manual_search_v2',manualSearch);};modeLabel.append(modeCheck,document.createTextNode('지도 이동 후 직접 검색'));document.body.append(mapSearch,modeLabel);
+const modeLabel=element('label','cm-map-mode');const modeCheck=element('input');modeCheck.type='checkbox';modeCheck.checked=manualSearch;modeCheck.onchange=()=>{manualSearch=modeCheck.checked;writeLocal('campmap_manual_search_v2',manualSearch);};modeLabel.title='지도를 움직여도 자동으로 검색하지 않고, \'이 지역 검색\'을 눌렀을 때만 검색';modeLabel.setAttribute('aria-label','지도 이동 후 직접 검색');modeLabel.append(modeCheck,element('span','cm-map-mode-icon'),element('span','cm-map-mode-text','지도 이동 후 직접 검색'));document.body.append(mapSearch,modeLabel);
 const baseSwitch=switchView;
 switchView=function(view){baseSwitch(view);mapSearch.hidden=modeLabel.hidden=view!=='map';};
 fetchCampsInView=async function(){
