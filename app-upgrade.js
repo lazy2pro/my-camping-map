@@ -213,14 +213,35 @@ function renderGearResults(root,results) {
     group.append(head);
     const grid=element('div','cm-gear-grid');if(open)group.append(grid);
     if(open)list.forEach(item=>{
-      const card=element('div','item-card gear-card');const info=element('div','gear-card-info');
+      // 수량만큼 겹친 타일. 누를 때마다 하나씩 '챙김'으로 켜지고, 다 켜진 뒤 한 번 더 누르면 0으로.
+      const qtyN=Math.max(1,item.quantity||1);
+      const card=element('div','item-card gear-card gear-tile');card.tabIndex=0;card.setAttribute('role','button');
+      if(qtyN>1)card.classList.add('stack-'+Math.min(qtyN,3));
+      const info=element('div','gear-card-info');
       info.append(element('div','cm-muted gear-maker',item.manufacturer||'제조사 미입력'),element('div','gear-name',item.name));
-      const total=Number(item.price||0)*(item.quantity||1);
-      info.append(element('div','gear-total',item.price?money(total):'가격 미입력'));
-      if(item.price&&(item.quantity||1)>1)info.append(element('div','gear-price',money(item.price)+' × '+(item.quantity||1)));
-      if(item.usedPrice!=null)info.append(element('div','cm-muted','중고가 '+money(item.usedPrice)));
-      const actions=element('div','cm-row cm-gear-row-actions');const qty=element('div','cm-stepper');qty.append(button('−',()=>changeGearQty(item.id,-1)),element('span','',(item.quantity||1)+'개'),button('+',()=>changeGearQty(item.id,1)));const menu=element('details','cm-tools-menu');const menuTitle=element('summary','','•••');menuTitle.setAttribute('aria-label',item.name+' 장비 관리');menu.append(menuTitle);const menuContent=element('div','cm-tools-content');menuContent.append(button('수정',()=>{menu.open=false;editGear(item);}),button('삭제',()=>deleteGearItem(item.id),'cm-button cm-danger'));menu.append(menuContent);actions.append(qty,menu);
-      info.append(actions);card.append(info);grid.append(card);
+      const dots=element('div','gear-dots');
+      const paint=()=>{
+        const act=Math.min(qtyN,Number((extra.gearActive||{})[item.id]||0));
+        card.classList.toggle('on',act>0);card.classList.toggle('full',act>=qtyN);
+        dots.replaceChildren(...Array.from({length:qtyN},(_,i)=>element('i',i<act?'lit':'')));
+        dots.append(element('span','gear-count',act+'/'+qtyN));
+        card.setAttribute('aria-label',item.name+' '+act+'개 챙김, 전체 '+qtyN+'개. 누르면 하나 더 챙김');
+      };
+      const tap=()=>{
+        extra.gearActive=extra.gearActive||{};
+        const cur=Math.min(qtyN,Number(extra.gearActive[item.id]||0));
+        const next=cur>=qtyN?0:cur+1;
+        if(next)extra.gearActive[item.id]=next;else delete extra.gearActive[item.id];
+        persistExtra();paint();
+        card.classList.remove('bump');void card.offsetWidth;card.classList.add('bump');
+      };
+      card.addEventListener('click',e=>{if(e.target.closest('details'))return;tap();});
+      card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();tap();}});
+      const menu=element('details','cm-tools-menu gear-tile-menu');const menuTitle=element('summary','','•••');menuTitle.setAttribute('aria-label',item.name+' 장비 관리');menu.append(menuTitle);
+      const menuContent=element('div','cm-tools-content');
+      menuContent.append(button('수량 +1',()=>{menu.open=false;changeGearQty(item.id,1);}),button('수량 −1',()=>{menu.open=false;changeGearQty(item.id,-1);}),button('챙김 초기화',()=>{menu.open=false;if(extra.gearActive)delete extra.gearActive[item.id];persistExtra();paint();}),button('수정',()=>{menu.open=false;editGear(item);}),button('삭제',()=>deleteGearItem(item.id),'cm-button cm-danger'));
+      menu.append(menuContent);
+      info.append(dots);card.append(menu,info);paint();grid.append(card);
     });results.append(group);
   });
 }
