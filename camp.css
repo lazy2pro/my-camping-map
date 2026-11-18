@@ -845,3 +845,45 @@ body.has-next-camp .cm-map-search { top: calc(env(safe-area-inset-top) + 182px) 
 
 /* 지도를 화면 끝까지 (viewport-fit=cover 와 함께: 상태 표시 영역 밑까지 지도를 깐다) */
 #map { position: fixed; top: 0; left: 0; bottom: 0; width: 100%; height: auto; }
+
+/* =====================================================================
+   지도 버튼: 테슬라 앱처럼 오른쪽 동그란 버튼 세로 줄 (등유 · 직접 검색 · 내 위치)
+   ===================================================================== */
+#map-fuel-toggle, .cm-map-mode, .gps-btn {
+  position: fixed !important; left: auto !important; right: calc(14px + env(safe-area-inset-right)) !important;
+  width: 46px !important; height: 46px !important; min-height: 0 !important; padding: 0 !important;
+  border-radius: 50% !important; display: grid !important; place-items: center !important;
+  font-size: 0 !important; color: var(--ink) !important; transform: none !important;
+}
+#map-fuel-toggle { top: calc(env(safe-area-inset-top) + 92px) !important; }
+.cm-map-mode { top: calc(env(safe-area-inset-top) + 148px) !important; bottom: auto !important; cursor: pointer; }
+.gps-btn { top: calc(env(safe-area-inset-top) + 204px) !important; bottom: auto !important; }
+/* 다음 캠핑 카드가 있으면 그 아래로 */
+body.has-next-camp #map-fuel-toggle { top: calc(env(safe-area-inset-top) + 182px) !important; }
+body.has-next-camp .cm-map-mode { top: calc(env(safe-area-inset-top) + 238px) !important; }
+body.has-next-camp .gps-btn { top: calc(env(safe-area-inset-top) + 294px) !important; }
+
+/* 등유: 아이콘만 */
+#map-fuel-toggle::before { content: ""; width: 22px; height: 22px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 8h5M15 10h2a2 2 0 0 1 2 2v4a1.5 1.5 0 0 0 3 0V8l-3-3'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 8h5M15 10h2a2 2 0 0 1 2 2v4a1.5 1.5 0 0 0 3 0V8l-3-3'/%3E%3C/svg%3E") center / contain no-repeat; }
+#map-fuel-toggle.active { background: var(--forest) !important; color: #fff !important; }
+
+/* 지도 이동 후 직접 검색: 손 모양 토글 */
+.cm-map-mode input { position: absolute; opacity: 0; pointer-events: none; }
+.cm-map-mode-text { display: none; }
+.cm-map-mode-icon { width: 22px; height: 22px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8a8 8 0 0 0 16 0v-2a2 2 0 0 0-4 0'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8a8 8 0 0 0 16 0v-2a2 2 0 0 0-4 0'/%3E%3C/svg%3E") center / contain no-repeat; }
+.cm-map-mode:has(input:checked) { background: var(--forest) !important; color: #fff !important; }
+
+.gps-icon { width: 22px !important; height: 22px !important; }
+#map-fuel-toggle:active, .cm-map-mode:active, .gps-btn:active { transform: scale(.94) !important; }
+body:not([data-view="map"]) .cm-map-mode { display: none !important; }
+
+/* 넓은 화면: 사이드바 '등유'와 겹치므로 등유 버튼은 숨기고 나머지만 */
+@media (min-width: 761px) {
+  body #map-fuel-toggle { display: none !important; }
+  .cm-map-mode, body.has-next-camp .cm-map-mode { top: 150px !important; right: 24px !important; }
+  .gps-btn, body.has-next-camp .gps-btn { top: 206px !important; right: 24px !important; }
+}
