@@ -1,0 +1,2754 @@
+// 용캠프 메인 스크립트 (예전 index.html 안의 인라인 스크립트)
+const NON_RESERVATION_HOSTS = [
+    'blog.naver.com', 'm.blog.naver.com', 'post.naver.com',
+    'cafe.naver.com', 'm.cafe.naver.com',
+    'instagram.com', 'facebook.com', 'youtube.com', 'youtu.be',
+    'tistory.com', 'brunch.co.kr', 'band.us'
+];
+
+// 네이버 지역검색 결과 중 캠핑장 본체가 아니라 '입구/주차장/매표소' 같은
+// 부속 지점(랜드마크)만 별도로 잡히는 경우가 있어, 이런 이름은 보완 검색 결과에서 제외한다.
+const NON_CAMP_NAME_SUFFIX = /(입구|주차장|매표소|정문|후문|관리사무소|사무실|안내소)$/;
+
+// 글램핑 전용 시설은 토글을 끈 경우에만 숨긴다. 이름으로 추측하지 않고,
+// 정보 더보기의 시설 유형(고캠핑 induty)에 글램핑 외 오토캠핑·야영장·카라반이
+// 함께 있는지로 판정한다. 예: "글램핑, 자동차야영장"은 계속 표시한다.
+let includeGlamping = false;
+function isGlampingOnly(camp) {
+    // 고캠핑 원본의 사이트 수가 있으면 이를 최우선으로 사용한다. 예를 들어
+    // 서초바글처럼 업종은 일반야영장이어도 글램핑 17면·다른 사이트 0면인
+    // 경우를 정확하게 글램핑 전용으로 분류할 수 있다.
+    if (typeof camp.glampSiteCount === 'number' && typeof camp.nonGlampingSiteCount === 'number') {
+        return camp.glampSiteCount > 0 && camp.nonGlampingSiteCount === 0;
+    }
+
+    // 사이트 수를 주지 않는 보완 검색 결과는 업종 텍스트로만 보수적으로 판정한다.
+    const facilityTypes = camp.category || '';
+    if (!/글램핑/.test(facilityTypes)) return false;
+    const withoutGlamping = facilityTypes.replace(/글램핑(?:장|존)?/g, '');
+    return !/(오토\s*캠핑|자동차\s*야영장|일반\s*야영장|야영장|카라반|캠핑)/.test(withoutGlamping);
+}
+
+function filterGlamping(camps) {
+    return includeGlamping ? camps : camps.filter((camp) => !isGlampingOnly(camp));
+}
+
+function toggleGlamping() {
+    includeGlamping = !includeGlamping;
+    const toggle = document.getElementById('glamping-toggle');
+    toggle.classList.toggle('active', includeGlamping);
+    toggle.setAttribute('aria-pressed', String(includeGlamping));
+    toggle.title = includeGlamping ? '글램핑 포함 검색 중' : '글램핑 전용 시설 제외 중';
+
+    const keyword = document.getElementById('search-keyword').value.trim();
+    if (keyword) searchCamping();
+    else fetchCampsInView();
+}
+
+// 고캠핑 등록 캠핑장이 공백/번호 표기 차이로 같은 곳이 중복 등록된 경우
+// (예: '선택적고립캠핑장' / '선택적 고립 캠핑장 1') 이름을 비교하기 위한 정규화.
+function normalizeCampNameForDedup(name) {
+    return (name || '').replace(/\s+/g, '').replace(/\d+$/, '');
+}
+
+// 중복 후보 중 예약/홈페이지/전화번호 등 실제 정보가 더 많은 쪽을 고른다.
+function campRichness(c) {
+    let score = 0;
+    if (c.resveUrl) score += 2;
+    if (c.homepage) score += 1;
+    if (c.tel) score += 1;
+    return score;
+}
+
+function isReservationWorthyUrl(url) {
+    if (!url || !url.startsWith('http')) return false;
+    try {
+        const host = new URL(url).hostname.replace(/^www\./, '');
+        return !NON_RESERVATION_HOSTS.some((bad) => host.includes(bad));
+    } catch (e) {
+        return false;
+    }
+}
+
+// 서버(reservation-link.js)와 동일한 사이트 판별 패턴.
+// 고캠핑 registry의 resveUrl/homepage가 이미 이 사이트를 직접 가리키는 경우
+// 구글 검색으로 우회하지 않고 바로 연결하기 위해 사용한다.
+const SITE_PATTERNS = {
+    camfit: /camfit\.co\.kr/i,
+    thankyoucamping: /thankqcamping\.com/i,
+    interpark: /tickets?\.interpark\.com/i,
+};
+
+function detectDirectSiteLinks(item) {
+    const links = {};
+    [item.resveUrl, item.homepage].forEach((url) => {
+        if (!isReservationWorthyUrl(url)) return;
+        if (!links.camfit && SITE_PATTERNS.camfit.test(url)) links.camfit = url;
+        if (!links.thankyoucamping && SITE_PATTERNS.thankyoucamping.test(url)) links.thankyoucamping = url;
+        if (!links.interpark && SITE_PATTERNS.interpark.test(url)) links.interpark = url;
+    });
+    return links;
+}
+
+const API_BASE = '/api/camping';
+
+let map;
+let myLocationMarker = null;
+let currentMarkers = [];
+let fetchTimer = null;
+let currentFetchController = null;
+
+// 캐시 객체: 반복적인 주소 지오코딩 API 요청 방지 (최대 500개, 초과 시 오래된 항목부터 제거)
+const geocodeCache = new Map();
+const GEOCODE_CACHE_LIMIT = 500;
+function cacheGeocode(address, result) {
+    geocodeCache.set(address, result);
+    if (geocodeCache.size > GEOCODE_CACHE_LIMIT) {
+        geocodeCache.delete(geocodeCache.keys().next().value);
+    }
+}
+
+// 캐시 객체: 동일/인접 좌표에 대한 반복 캠핑장 조회 API 요청 방지 (60초 TTL, 최대 100개)
+const campsCache = new Map();
+const CAMPS_CACHE_TTL_MS = 60000;
+const CAMPS_CACHE_LIMIT = 100;
+function campsCacheKey(lat, lng, radius) {
+    // 좌표를 약 1km 격자로 반올림해 살짝 다른 위치에서도 캐시가 재사용되도록 함
+    const gridLat = Math.round(lat * 100) / 100;
+    const gridLng = Math.round(lng * 100) / 100;
+    return `${gridLat},${gridLng},${radius}`;
+}
+async function fetchCampsData(lat, lng, radius, signal) {
+    const key = campsCacheKey(lat, lng, radius);
+    const cached = campsCache.get(key);
+    if (cached && (Date.now() - cached.ts) < CAMPS_CACHE_TTL_MS) {
+        return cached.data;
+    }
+    const url = `${API_BASE}?type=location&mapX=${lng}&mapY=${lat}&radius=${radius}`;
+    const res = await fetch(url, signal ? { signal } : undefined);
+    const data = await res.json();
+    if (!res.ok) {
+        const err = new Error(data.error || '캠핑장 정보를 불러오지 못했습니다.');
+        err.isApiError = true;
+        throw err;
+    }
+    campsCache.set(key, { data, ts: Date.now() });
+    if (campsCache.size > CAMPS_CACHE_LIMIT) {
+        campsCache.delete(campsCache.keys().next().value);
+    }
+    return data;
+}
+
+// ---- 등유(실내등유) 가격 레이어 ----
+let fuelLayerActive = false;
+let fuelMarkers = []; // { marker, station } 쌍으로 관리 (선택 강조 시 아이콘 교체를 위해)
+let selectedFuelId = null;
+let suppressNextFuelFetch = false;
+const fuelCache = new Map();
+const FUEL_CACHE_TTL_MS = 30 * 60 * 1000; // 오피넷 응답도 30분 캐시되므로 클라이언트도 동일하게 맞춘다
+const FUEL_CACHE_LIMIT = 50;
+const FUEL_API_BASE = '/api/kerosene';
+// 오피넷 API가 허용하는 최대 반경. 주유소는 캠핑장보다 드물어 줌 레벨과 무관하게 항상 이 값을 쓴다.
+const FUEL_SEARCH_RADIUS_M = 5000;
+
+function fuelCacheKey(lat, lng, radius) {
+    const gridLat = Math.round(lat * 100) / 100;
+    const gridLng = Math.round(lng * 100) / 100;
+    return `${gridLat},${gridLng},${radius}`;
+}
+
+async function fetchFuelStations(lat, lng, radius) {
+    const key = fuelCacheKey(lat, lng, radius);
+    const cached = fuelCache.get(key);
+    if (cached && (Date.now() - cached.ts) < FUEL_CACHE_TTL_MS) {
+        return cached.stations;
+    }
+    const res = await fetch(`${FUEL_API_BASE}?lat=${lat}&lng=${lng}&radius=${radius}`);
+    const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.error || '등유 가격 정보를 불러오지 못했습니다.');
+    }
+    const stations = (data.stations || []).filter(station => Number.isFinite(station.price) && station.price > 0);
+    fuelCache.set(key, { stations, ts: Date.now() });
+    if (fuelCache.size > FUEL_CACHE_LIMIT) {
+        fuelCache.delete(fuelCache.keys().next().value);
+    }
+    return stations;
+}
+
+function clearFuelMarkers() {
+    fuelMarkers.forEach(({ marker }) => {
+        naver.maps.Event.clearInstanceListeners(marker);
+        marker.setMap(null);
+    });
+    fuelMarkers = [];
+    selectedFuelId = null;
+}
+
+function renderFuelStations(stations) {
+    clearFuelMarkers();
+    stations.forEach((station) => {
+        const marker = new naver.maps.Marker({
+            position: new naver.maps.LatLng(station.lat, station.lng),
+            map,
+            icon: FUEL_ICON,
+            zIndex: 50, // 캠핑장 핀보다 아래에 그려지도록
+        });
+        naver.maps.Event.addListener(marker, 'click', () => {
+            hideResults();
+            setFuelSelection(station.id);
+            openFuelSheet(station);
+        });
+        fuelMarkers.push({ marker, station });
+    });
+    renderFuelPriceList(stations);
+}
+
+// 지도는 그대로 둔 채, 선택된 주유소 마커만 살짝 커지고 파란 광채가 도는 강조 아이콘으로 바꾼다.
+// 동시에 우측 리스트에서도 해당 항목에 선택 표시를 한다. (지도 이동/줌 없음)
+function setFuelSelection(stationId) {
+    if (selectedFuelId === stationId) return;
+
+    const prevEntry = fuelMarkers.find((m) => m.station.id === selectedFuelId);
+    if (prevEntry) prevEntry.marker.setIcon(FUEL_ICON);
+
+    selectedFuelId = stationId;
+
+    if (stationId != null) {
+        const entry = fuelMarkers.find((m) => m.station.id === stationId);
+        if (entry) entry.marker.setIcon(FUEL_ICON_SELECTED);
+    }
+
+    document.querySelectorAll('#fuel-price-list li').forEach((li) => {
+        li.classList.toggle('selected', li.dataset.stationId === String(stationId));
+    });
+}
+
+function tmapUrl(station) {
+    return `tmap://route?goalname=${encodeURIComponent(station.name)}&goalx=${station.lng}&goaly=${station.lat}`;
+}
+
+// 지도 우측에 가격 낮은 순으로 정렬된 리스트를 그린다.
+// 항목에 마우스를 올리거나 누르면 지도는 그대로 둔 채 해당 마커만 강조되고,
+// 오른쪽의 작은 '티맵' 버튼으로 지도 이동 없이 바로 경로안내를 보낼 수 있다.
+function renderFuelPriceList(stations) {
+    const listEl = document.getElementById('fuel-price-list');
+    if (!stations || stations.length === 0) {
+        listEl.classList.remove('active');
+        listEl.innerHTML = '';
+        return;
+    }
+
+    const sorted = [...stations].sort((a, b) => a.price - b.price);
+    listEl.innerHTML = '';
+    sorted.forEach((station, index) => {
+        const li = document.createElement('li');
+        li.dataset.stationId = station.id;
+        li.innerHTML = `
+            <div class="fuel-list-info">
+                <div class="fuel-list-top">
+                    <span class="fuel-list-rank">${index + 1}</span>
+                    <span class="fuel-list-price">${station.price.toLocaleString('ko-KR')}원</span>
+                </div>
+                <div class="fuel-list-name">${station.name}</div>
+                <div class="fuel-list-sub">${station.brand || ''}${station.brand ? ' · ' : ''}약 ${Math.round(station.distance)}m</div>
+            </div>
+            <a class="fuel-list-tmap-btn">티맵</a>
+        `;
+        li.addEventListener('mouseenter', () => setFuelSelection(station.id));
+        li.addEventListener('click', () => {
+            setFuelSelection(station.id);
+            // 줌(스케일)은 그대로 두고, 해당 주유소가 지도 중앙에 오도록만 이동한다.
+            suppressNextFuelFetch = true;
+            map.setCenter(new naver.maps.LatLng(station.lat, station.lng));
+        });
+        li.querySelector('.fuel-list-tmap-btn').href = tmapUrl(station);
+        listEl.appendChild(li);
+    });
+    listEl.classList.add('active');
+}
+
+async function fetchFuelInView() {
+    if (!map) return null;
+    const center = map.getCenter();
+    // 주유소는 캠핑장보다 훨씬 드문드문 있어서, 줌 레벨에 따라 반경을 줄이면
+    // 확대했을 때 아무것도 안 보이는 경우가 많다. 오피넷 API가 허용하는
+    // 최대 반경(5km)을 줌 레벨과 무관하게 항상 사용한다.
+    const radius = FUEL_SEARCH_RADIUS_M;
+    try {
+        const stations = await fetchFuelStations(center.lat(), center.lng(), radius);
+        renderFuelStations(stations);
+        return stations;
+    } catch (err) {
+        console.error('등유 가격 조회 실패:', err);
+        showStatus(err.message || '등유 가격 정보를 불러오지 못했습니다.', true, 3000);
+        return null;
+    }
+}
+
+function toggleFuelLayer() {
+    fuelLayerActive = !fuelLayerActive;
+    const btn = document.getElementById('sidebar-btn-fuel');
+    if (btn) btn.classList.toggle('active', fuelLayerActive);
+    const mapBtn = document.getElementById('map-fuel-toggle');
+    if (mapBtn) { mapBtn.classList.toggle('active', fuelLayerActive); mapBtn.setAttribute('aria-pressed', String(fuelLayerActive)); mapBtn.textContent = fuelLayerActive ? '⛽ 등유 끄기' : '⛽ 등유 조회'; }
+
+    if (fuelLayerActive) {
+        showStatus('주변 등유 가격 불러오는 중...');
+        fetchFuelInView().then((stations) => {
+            if (!stations) return; // 오류는 fetchFuelInView에서 이미 표시함
+            if (stations.length === 0) {
+                showStatus('이 주변 반경엔 등유 판매 주유소 정보가 없어요', false, 3000);
+            } else {
+                showStatus(`주유소 ${stations.length}곳 표시 중`, false, 2000);
+            }
+        });
+    } else {
+        clearFuelMarkers();
+        renderFuelPriceList([]);
+    }
+}
+
+function openFuelSheet(station) {
+    const sheet = document.getElementById('bottom-sheet');
+    const gpsBtn = document.getElementById('gps-btn');
+
+    document.getElementById('camp-category').innerText = `⛽ ${station.brand || '주유소'} · 실내등유`;
+    document.getElementById('camp-title').innerText = station.name;
+    // 가격이 가장 중요한 정보라 별도 span으로 크게 강조하고, 거리는 옆에 작게 붙인다.
+    document.getElementById('camp-address').innerHTML =
+        `<span class="fuel-price">${station.price.toLocaleString('ko-KR')}원/L</span> · 약 ${Math.round(station.distance)}m 거리`;
+    document.getElementById('camp-tel').innerText = '';
+
+    const btnRow = document.getElementById('reserve-btn-row');
+    btnRow.innerHTML = '';
+    btnRow.style.flexDirection = 'column';
+
+    // 티맵 앱 딥링크(비공식 스킴). 앱이 설치돼 있으면 바로 목적지 경로안내로 연결되고,
+    // 데스크톱이나 앱 미설치 환경에서는 별다른 동작 없이 무시된다.
+    const tmapBtn = document.createElement('a');
+    tmapBtn.href = `tmap://route?goalname=${encodeURIComponent(station.name)}&goalx=${station.lng}&goaly=${station.lat}`;
+    tmapBtn.className = 'reserve-btn primary';
+    tmapBtn.innerText = '티맵으로 길찾기';
+    btnRow.appendChild(tmapBtn);
+
+    // 캠핑장 시트용 비동기 예약버튼 업데이트(upgradeReservationButtons)가 이 시트에
+    // 뒤늦게 반영되지 않도록 세대를 올려 무효화한다.
+    sheetGeneration++;
+
+    sheet.style.transform = '';
+    sheet.classList.add('active');
+    document.getElementById('sheet-backdrop').classList.add('active');
+    gpsBtn.classList.add('shifted');
+}
+
+function makePinIcon(color) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 30 40">
+        <path d="M15 0C6.7 0 0 6.7 0 15c0 11 15 25 15 25s15-14 15-25C30 6.7 23.3 0 15 0z" fill="${color}"/>
+        <circle cx="15" cy="15" r="6" fill="white"/>
+    </svg>`;
+    return { 
+        url: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg), 
+        size: new naver.maps.Size(30, 40), 
+        anchor: new naver.maps.Point(15, 40) 
+    };
+}
+
+// 등유 판매 주유소용 핀 — 같은 모양에 흰 원 대신 주유기(⛽) 아이콘을 넣어 캠핑장 핀과 구분한다.
+// selected=true면 살짝 커지고 파란 광채(halo)가 도는 강조 버전을 만든다.
+function makeFuelPinIcon(selected) {
+    const color = '#1c7ed6';
+    const scale = selected ? 2.2 : 1;
+    const w = 30 * scale;
+    const h = 40 * scale;
+    const glow = selected
+        ? `<circle cx="15" cy="15" r="12" fill="none" stroke="#ff3b3b" stroke-width="5" opacity="0.95"/>
+           <circle cx="15" cy="15" r="12" fill="#ff3b3b" opacity="0.3"/>`
+        : '';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 30 40">
+        ${glow}
+        <path d="M15 0C6.7 0 0 6.7 0 15c0 11 15 25 15 25s15-14 15-25C30 6.7 23.3 0 15 0z" fill="${color}"/>
+        <circle cx="15" cy="15" r="9" fill="white"/>
+        <text x="15" y="16" font-size="13" text-anchor="middle" dominant-baseline="middle">&#9981;</text>
+    </svg>`;
+    return {
+        url: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg),
+        size: new naver.maps.Size(w, h),
+        anchor: new naver.maps.Point(w / 2, h),
+    };
+}
+let GREEN_ICON, ORANGE_ICON, FUEL_ICON, FUEL_ICON_SELECTED;
+
+function distanceMeters(lat1, lng1, lat2, lng2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function initMap() {
+    map = new naver.maps.Map('map', {
+        center: new naver.maps.LatLng(37.5665, 126.9780),
+        zoom: 11,
+        minZoom: 6,
+    });
+
+    GREEN_ICON = makePinIcon('#2b8a3e');
+    ORANGE_ICON = makePinIcon('#e8590c');
+    FUEL_ICON = makeFuelPinIcon(false);
+    FUEL_ICON_SELECTED = makeFuelPinIcon(true);
+
+    naver.maps.Event.addListener(map, 'click', () => {
+        closeSheet();
+        hideResults();
+    });
+
+    naver.maps.Event.addListener(map, 'idle', () => {
+        clearTimeout(fetchTimer);
+        fetchTimer = setTimeout(() => {
+            fetchCampsInView();
+            updateWeatherForMapCenter();
+            if (fuelLayerActive) {
+                // 리스트 항목 클릭으로 지도를 이동시킨 직후에는, 이미 갖고 있는 데이터를
+                // 다시 불러와 강조 표시(선택 상태)가 리셋되는 걸 막기 위해 한 번만 건너뛴다.
+                if (suppressNextFuelFetch) {
+                    suppressNextFuelFetch = false;
+                } else {
+                    fetchFuelInView();
+                }
+            }
+        }, 500);
+    });
+
+    moveToCurrentLocation();
+    fetchCampsInView();
+    updateWeatherForMapCenter();
+}
+
+// 예전엔 줌 레벨 -> 반경 고정표를 썼는데, 이건 좁은 화면(모바일) 기준으로 잡혀 있어서
+// 넓은 데스크톱 창에서는 실제로 보이는 영역이 표보다 훨씬 넓어 원이 화면에 비해 작아 보였다.
+// 그래서 map.getBounds()로 지금 실제 보이는 영역을 구해, 그 대각선의 절반(중심에서 가장 먼
+// 모서리까지의 거리)을 "이 화면을 덮으려면 필요한 반경"으로 직접 계산한다.
+function calcViewRadiusMeters() {
+    const bounds = map.getBounds();
+    const sw = bounds.getSW();
+    const ne = bounds.getNE();
+    return distanceMeters(sw.lat(), sw.lng(), ne.lat(), ne.lng()) / 2;
+}
+
+// 고캠핑 API는 지도 중심 기준 반경 최대 20km까지만 검색을 허용한다. 많이 축소된 상태에서는
+// 화면에 보이는 넓은 영역 중 이 20km 원 안에 있는 캠핑장만 표시되므로, 지도를 살짝만
+// 옮겨도(원의 위치가 바뀌므로) 표시되는 캠핑장이 완전히 달라 보일 수 있다.
+// 이 원을 지도 위에 실제로 그려서, 왜 그렇게 보이는지 한눈에 알 수 있게 한다.
+let searchRadiusCircle = null;
+
+function updateSearchRadiusCircle(lat, lng, radiusMeters) {
+    const center = new naver.maps.LatLng(lat, lng);
+    if (!searchRadiusCircle) {
+        searchRadiusCircle = new naver.maps.Circle({
+            map,
+            center,
+            radius: radiusMeters,
+            strokeColor: '#2b8a3e',
+            strokeOpacity: 0.45,
+            strokeWeight: 1,
+            fillColor: '#2b8a3e',
+            fillOpacity: 0.04,
+            clickable: false,
+            zIndex: 1,
+        });
+    } else {
+        searchRadiusCircle.setCenter(center);
+        searchRadiusCircle.setRadius(radiusMeters);
+    }
+    searchRadiusCircle.setMap(map);
+    clearSearchGridCircles();
+}
+
+// ---- 화면이 넓게 축소된 상태에서는, 지도 중심 하나만 검색해선 화면 대부분이 빈 채로 남으므로
+// 화면(bounds)을 격자로 나눠 여러 지점을 검색해서 합친다(그리드 타일링). ----
+const GRID_TILE_RADIUS_M = 20000; // 고캠핑 API가 허용하는 최대 반경
+const GRID_TILE_SPACING_M = 30000; // 반경보다 살짝 넓게 잡아 인접 원끼리 겹치게 해서 사각형 화면의 빈틈을 줄인다
+const GRID_MAX_TILES = 12; // API 호출이 과도해지지 않도록 두는 상한
+
+function buildSearchGrid(bounds) {
+    const sw = bounds.getSW();
+    const ne = bounds.getNE();
+    const latSpan = ne.lat() - sw.lat();
+    const lngSpan = ne.lng() - sw.lng();
+
+    const midLat = (sw.lat() + ne.lat()) / 2;
+    const metersPerDegLat = 111320;
+    const metersPerDegLng = 111320 * Math.cos(midLat * Math.PI / 180);
+
+    const heightM = latSpan * metersPerDegLat;
+    const widthM = lngSpan * metersPerDegLng;
+
+    let cols = Math.max(1, Math.ceil(widthM / GRID_TILE_SPACING_M));
+    let rows = Math.max(1, Math.ceil(heightM / GRID_TILE_SPACING_M));
+
+    // 타일 수가 상한을 넘으면, 더 넓은 축(행/열)을 하나씩 줄여서 상한 안으로 맞춘다.
+    // (완벽하게 빈틈없이 덮진 못하지만, 중심 하나만 보는 것보단 훨씬 넓게 커버한다.)
+    while (cols * rows > GRID_MAX_TILES && (cols > 1 || rows > 1)) {
+        if (cols >= rows) cols = Math.max(1, cols - 1);
+        else rows = Math.max(1, rows - 1);
+    }
+
+    const points = [];
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const lat = sw.lat() + (latSpan * (r + 0.5)) / rows;
+            const lng = sw.lng() + (lngSpan * (c + 0.5)) / cols;
+            points.push({ lat, lng });
+        }
+    }
+    return points;
+}
+
+let searchGridCircles = [];
+
+function updateSearchGridCircles(points, radiusMeters) {
+    if (searchRadiusCircle) searchRadiusCircle.setMap(null);
+    clearSearchGridCircles();
+    searchGridCircles = points.map((p) => new naver.maps.Circle({
+        map,
+        center: new naver.maps.LatLng(p.lat, p.lng),
+        radius: radiusMeters,
+        strokeColor: '#2b8a3e',
+        strokeOpacity: 0.35,
+        strokeWeight: 1,
+        fillColor: '#2b8a3e',
+        fillOpacity: 0.03,
+        clickable: false,
+        zIndex: 1,
+    }));
+}
+
+function clearSearchGridCircles() {
+    searchGridCircles.forEach((c) => c.setMap(null));
+    searchGridCircles = [];
+}
+
+async function fetchCampsInView() {
+    if (!map) return;
+
+    if (currentFetchController) {
+        currentFetchController.abort();
+    }
+    currentFetchController = new AbortController();
+    const signal = currentFetchController.signal;
+
+    showStatus('주변 캠핑장 불러오는 중...');
+
+    const center = map.getCenter();
+    const lat = center.lat();
+    const lng = center.lng();
+    const idealRadius = calcViewRadiusMeters();
+    const radius = Math.min(idealRadius, GRID_TILE_RADIUS_M);
+    // 지도 중심 하나(반경 최대 20km)로는 화면 전체를 못 덮을 만큼 축소된 상태면, 화면을 격자로
+    // 나눠 여러 지점을 검색해서 합친다. 그 정도로 축소되지 않았으면 기존처럼 중심 하나만 검색한다.
+    const needsGrid = idealRadius > GRID_TILE_RADIUS_M;
+
+    try {
+        let camps;
+        let gridPoints = null;
+
+        if (needsGrid) {
+            gridPoints = buildSearchGrid(map.getBounds());
+            const results = await Promise.all(
+                gridPoints.map((p) =>
+                    fetchCampsData(p.lat, p.lng, GRID_TILE_RADIUS_M, signal).catch((err) => {
+                        if (err.name === 'AbortError') throw err;
+                        console.error('그리드 타일 검색 실패:', err);
+                        return { camps: [] };
+                    })
+                )
+            );
+            const merged = new Map();
+            results.forEach((r) => (r.camps || []).forEach((c) => merged.set(c.id, c)));
+            camps = [...merged.values()];
+        } else {
+            const data = await fetchCampsData(lat, lng, radius, signal);
+            camps = data.camps;
+        }
+
+        // 원본 고캠핑 목록은 아래 네이버 보완 검색의 중복 제거에도 사용한다.
+        // 표시할 핀만 글램핑 토글 기준으로 별도 필터링해야, 숨긴 글램핑장이
+        // 네이버 보완 검색 결과로 다시 나타나지 않는다.
+        const officialCamps = camps;
+        const visibleCamps = filterGlamping(officialCamps);
+        renderCamps(visibleCamps);
+
+        if (needsGrid) {
+            updateSearchGridCircles(gridPoints, GRID_TILE_RADIUS_M);
+            showStatus(`캠핑장 ${visibleCamps.length}곳 표시 중 (화면 전체, ${gridPoints.length}개 구역으로 나눠 검색)`, false, 2500);
+        } else {
+            updateSearchRadiusCircle(lat, lng, radius);
+            const radiusKm = Math.round(radius / 1000);
+            const isCapped = idealRadius > radius;
+            const msg = isCapped
+                ? `캠핑장 ${visibleCamps.length}곳 표시 중 (지도 중심 반경 ${radiusKm}km까지만 검색돼요 · 지도를 이동해보세요)`
+                : `캠핑장 ${visibleCamps.length}곳 표시 중 (반경 ${radiusKm}km)`;
+            showStatus(msg, false, isCapped ? 3500 : 1800);
+        }
+
+        const extra = await fetchNaverSupplementaryCamps(officialCamps, lat, lng, signal);
+        const visibleExtra = filterGlamping(extra);
+        if (visibleExtra.length) {
+            addMarkers(visibleExtra, ORANGE_ICON);
+        }
+    } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.error(err);
+        showStatus(err.isApiError ? err.message : '네트워크 오류로 캠핑장을 불러오지 못했습니다.', true);
+    }
+}
+
+// ---- 지도 중심 기준 날씨(범례에 작게 표시) ----
+// WMO 날씨 코드(Open-Meteo 기준)를 간단한 이모지+설명으로 매핑.
+const WEATHER_CODE_MAP = {
+    0: '☀️ 맑음', 1: '🌤 대체로 맑음', 2: '⛅ 구름조금', 3: '☁️ 흐림',
+    45: '🌫 안개', 48: '🌫 안개',
+    51: '🌦 이슬비', 53: '🌦 이슬비', 55: '🌦 이슬비',
+    56: '🌧 언 이슬비', 57: '🌧 언 이슬비',
+    61: '🌧 약한 비', 63: '🌧 비', 65: '🌧 강한 비',
+    66: '🌧 언 비', 67: '🌧 언 비',
+    71: '🌨 약한 눈', 73: '🌨 눈', 75: '🌨 강한 눈', 77: '🌨 싸락눈',
+    80: '🌦 소나기', 81: '🌦 소나기', 82: '⛈ 강한 소나기',
+    85: '🌨 소낙눈', 86: '🌨 강한 소낙눈',
+    95: '⛈ 뇌우', 96: '⛈ 뇌우(우박)', 99: '⛈ 강한 뇌우(우박)',
+};
+
+const weatherCache = new Map();
+const WEATHER_CACHE_TTL_MS = 20 * 60 * 1000; // 날씨는 자주 안 바뀌므로 20분 캐시
+const WEATHER_CACHE_LIMIT = 50;
+
+function weatherCacheKey(lat, lng) {
+    // 대략 5km 격자로 반올림해 살짝만 이동해도 캐시를 재사용하게 한다.
+    const gridLat = Math.round(lat * 20) / 20;
+    const gridLng = Math.round(lng * 20) / 20;
+    return `${gridLat},${gridLng}`;
+}
+
+async function fetchWeatherAt(lat, lng) {
+    const key = weatherCacheKey(lat, lng);
+    const cached = weatherCache.get(key);
+    if (cached && (Date.now() - cached.ts) < WEATHER_CACHE_TTL_MS) {
+        return cached.data;
+    }
+    const res = await fetch(`/api/weather?lat=${lat}&lng=${lng}`);
+    const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.error || '날씨 정보를 불러오지 못했습니다.');
+    }
+    weatherCache.set(key, { data, ts: Date.now() });
+    if (weatherCache.size > WEATHER_CACHE_LIMIT) {
+        weatherCache.delete(weatherCache.keys().next().value);
+    }
+    return data;
+}
+
+function renderWeatherLegendLine(data) {
+    const el = document.getElementById('weather-legend-line');
+    if (!el) return;
+    if (!data || typeof data.temperature !== 'number') {
+        el.style.display = 'none';
+        return;
+    }
+    const desc = WEATHER_CODE_MAP[data.weatherCode] || '🌡';
+    el.innerText = `${desc} ${Math.round(data.temperature)}°C (지도 중심 기준)`;
+    el.style.display = 'block';
+}
+
+async function updateWeatherForMapCenter() {
+    if (!map) return;
+    const center = map.getCenter();
+    try {
+        const data = await fetchWeatherAt(center.lat(), center.lng());
+        renderWeatherLegendLine(data);
+    } catch (err) {
+        console.error('날씨 정보를 불러오지 못했습니다:', err);
+    }
+}
+
+function reverseGeocodeRegion(lat, lng) {
+    return new Promise((resolve) => {
+        if (!naver.maps.Service) { resolve(''); return; }
+        const coord = new naver.maps.LatLng(lat, lng);
+        naver.maps.Service.reverseGeocode({ coords: coord, orders: 'admcode' }, (status, response) => {
+            if (status !== naver.maps.Service.Status.OK) { resolve(''); return; }
+            const results = response.v2 && response.v2.results;
+            const region = results && results[0] && results[0].region;
+            if (!region) { resolve(''); return; }
+            const parts = [region.area1?.name, region.area2?.name, region.area3?.name].filter(Boolean);
+            resolve(parts.join(' '));
+        });
+    });
+}
+
+function geocodeAddress(address) {
+    if (geocodeCache.has(address)) {
+        return Promise.resolve(geocodeCache.get(address));
+    }
+
+    return new Promise((resolve) => {
+        if (!naver.maps.Service) { resolve(null); return; }
+        naver.maps.Service.geocode({ query: address }, (status, response) => {
+            if (status !== naver.maps.Service.Status.OK) { 
+                cacheGeocode(address, null);
+                resolve(null); 
+                return; 
+            }
+            const addresses = response.v2 && response.v2.addresses;
+            if (!addresses || !addresses.length) { 
+                cacheGeocode(address, null);
+                resolve(null); 
+                return; 
+            }
+            const item = addresses[0];
+            const roadHasNumber = item.roadAddress && /\d/.test(item.roadAddress);
+            const confirmedAddress = roadHasNumber
+                ? item.roadAddress
+                : (item.jibunAddress || item.roadAddress || address);
+
+            const result = {
+                lat: parseFloat(item.y),
+                lng: parseFloat(item.x),
+                address: confirmedAddress,
+            };
+
+            cacheGeocode(address, result);
+            resolve(result);
+        });
+    });
+}
+
+async function fetchNaverSupplementaryCamps(officialCamps, lat, lng, signal) {
+    try {
+        const region = await reverseGeocodeRegion(lat, lng);
+        const keyword = region ? `${region} 캠핑장` : '캠핑장';
+
+        const res = await fetch(`/api/nearby-camps?keyword=${encodeURIComponent(keyword)}`, { signal });
+        const data = await res.json();
+        if (!res.ok || !data.items) return [];
+
+        // 지오코딩은 좌표 확정을 위해 건당 1회 외부 API 호출이 발생하므로,
+        // 팬(pan)마다 최대 15건을 모두 조회하지 않고 상위 8건으로 제한한다.
+        // '입구/주차장' 같은 부속 지점 이름은 캠핑장 본체가 아니므로 미리 제외한다.
+        const geocoded = await Promise.all(
+            data.items
+                .filter((it) => !NON_CAMP_NAME_SUFFIX.test(it.name))
+                .slice(0, 8)
+                .map(async (it) => {
+                const coord = await geocodeAddress(it.address);
+                if (!coord) return null;
+                return {
+                    name: it.name,
+                    category: '보완 검색 (고캠핑 미등록)',
+                    address: coord.address,
+                    lat: coord.lat,
+                    lng: coord.lng,
+                    tel: it.tel,
+                    placeUrl: `https://map.naver.com/p/search/${encodeURIComponent(it.name)}`,
+                    source: 'naver',
+                };
+            })
+        );
+
+        return geocoded
+            .filter(Boolean)
+            .filter((k) => !officialCamps.some((o) => distanceMeters(o.lat, o.lng, k.lat, k.lng) < 300));
+    } catch (err) {
+        if (err.name === 'AbortError') return [];
+        console.error('보완 검색 실패:', err);
+        return [];
+    }
+}
+
+function renderCamps(camps) {
+    currentMarkers.forEach(({ marker }) => {
+        naver.maps.Event.clearInstanceListeners(marker);
+        marker.setMap(null);
+    });
+    currentMarkers = [];
+    addMarkers(filterGlamping(camps), GREEN_ICON);
+}
+
+// items는 이미 filterGlamping을 거친 목록을 받는다 (호출부에서 필터링). 여기서 다시 필터링하지 않아
+// 지도 이동마다 같은 필터를 두 번 도는 낭비를 없앤다.
+function addMarkers(items, icon) {
+    items.forEach((item) => {
+        const position = new naver.maps.LatLng(item.lat, item.lng);
+        const marker = new naver.maps.Marker({ position, map, icon });
+
+        naver.maps.Event.addListener(marker, 'click', () => {
+            hideResults();
+            openSheet(item);
+        });
+
+        currentMarkers.push({ marker, data: item });
+    });
+}
+
+function moveToCurrentLocation() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const locPosition = new naver.maps.LatLng(position.coords.latitude, position.coords.longitude);
+
+                if (!myLocationMarker) {
+                    myLocationMarker = new naver.maps.Marker({ position: locPosition, map: map });
+                } else {
+                    myLocationMarker.setPosition(locPosition);
+                }
+
+                if (map) map.panTo(locPosition);
+            },
+            (error) => {
+                console.warn('GPS 위치를 가져올 수 없습니다.', error);
+            }
+        );
+    }
+}
+
+async function searchCamping() {
+    const rawInput = document.getElementById('search-keyword').value.trim();
+    closeSheet();
+
+    if (!rawInput) {
+        hideResults();
+        return;
+    }
+
+    const btn = document.getElementById('search-btn');
+    btn.disabled = true;
+    btn.innerText = '검색중';
+
+    try {
+        // 1) 캠핑장 '이름' 검색을 우선한다 — 고캠핑 등록 캠핑장 + 보완 검색(네이버) 캠핑장 중
+        //    검색어가 이름에 들어있는 곳을 먼저 찾는다. (예: '갈기산' -> '갈기산캠핑장')
+        const nameMatches = await searchCampsByName(rawInput);
+        if (nameMatches.length > 0) {
+            showCampNameResults(nameMatches);
+            return;
+        }
+
+        // 2) 이름으로 못 찾은 경우에만 지명(장소) 검색으로 넘어간다.
+        //    동명 지역이 여러 곳이면 목록으로 보여주고 사용자가 고르게 한다.
+        const fallbackFound = await searchByPlaceName(rawInput);
+        if (!fallbackFound) {
+            alert(`'${rawInput}' 검색 결과를 찾지 못했습니다.`);
+        }
+        hideResults();
+    } catch (err) {
+        console.error(err);
+        alert('네트워크 오류로 검색하지 못했습니다.');
+    } finally {
+        btn.disabled = false;
+        btn.innerText = '검색';
+    }
+}
+
+// 고캠핑 등록 캠핑장 + 보완 검색(네이버) 캠핑장을 대상으로 이름 검색을 수행해 하나로 합친다.
+async function searchCampsByName(keyword) {
+    const results = [];
+    const seenKeys = new Set();
+    const addResult = (item) => {
+        const key = `${item.name}|${item.address}`;
+        if (seenKeys.has(key)) return;
+        seenKeys.add(key);
+        results.push(item);
+    };
+
+    // 고캠핑 등록 캠핑장 이름검색 — 공백/번호 표기만 다른 근접 중복 등록
+    // (예: '선택적고립캠핑장' / '선택적 고립 캠핑장 1')은 정보가 더 많은 쪽 하나로 합친다.
+    try {
+        const res = await fetch(`${API_BASE}?type=keyword&keyword=${encodeURIComponent(keyword)}`);
+        const data = await res.json();
+        if (res.ok && data.camps) {
+            data.camps.forEach((camp) => {
+                const dupIndex = results.findIndex(
+                    (o) =>
+                        o.source !== 'naver' &&
+                        normalizeCampNameForDedup(o.name) === normalizeCampNameForDedup(camp.name) &&
+                        distanceMeters(o.lat, o.lng, camp.lat, camp.lng) < 200
+                );
+                if (dupIndex === -1) {
+                    addResult(camp);
+                } else if (campRichness(camp) > campRichness(results[dupIndex])) {
+                    results[dupIndex] = camp;
+                }
+            });
+        }
+    } catch (err) {
+        console.error('고캠핑 이름검색 실패:', err);
+    }
+
+    // 고캠핑 미등록(보완 검색) 캠핑장 이름검색 — 검색어 그대로 + '캠핑장' 붙인 질의 둘 다 시도.
+    // '~입구/주차장'처럼 캠핑장 본체가 아닌 부속 지점 이름은 제외한다.
+    const naverQueries = [...new Set([keyword, `${keyword} 캠핑장`])];
+    for (const q of naverQueries) {
+        try {
+            const res = await fetch(`/api/nearby-camps?keyword=${encodeURIComponent(q)}`);
+            const data = await res.json();
+            if (!res.ok || !data.items) continue;
+
+            const matched = data.items
+                .filter((it) => it.name.includes(keyword) && !NON_CAMP_NAME_SUFFIX.test(it.name))
+                .slice(0, 5);
+            const geocoded = await Promise.all(matched.map(async (it) => {
+                const coord = await geocodeAddress(it.address);
+                if (!coord) return null;
+                return {
+                    name: it.name,
+                    category: '보완 검색 (고캠핑 미등록)',
+                    address: coord.address,
+                    lat: coord.lat,
+                    lng: coord.lng,
+                    tel: it.tel,
+                    placeUrl: `https://map.naver.com/p/search/${encodeURIComponent(it.name)}`,
+                    source: 'naver',
+                };
+            }));
+
+            geocoded.filter(Boolean).forEach((it) => {
+                const dupOfficial = results.some(
+                    (o) => o.source !== 'naver' && distanceMeters(o.lat, o.lng, it.lat, it.lng) < 300
+                );
+                if (!dupOfficial) addResult(it);
+            });
+        } catch (err) {
+            console.error('보완 검색 이름검색 실패:', err);
+        }
+    }
+
+    return filterGlamping(results);
+}
+
+function showCampNameResults(camps) {
+    camps = filterGlamping(camps);
+    const officialCamps = camps.filter((c) => c.source !== 'naver');
+    const supplementaryCamps = camps.filter((c) => c.source === 'naver');
+    renderCamps(officialCamps);
+    if (supplementaryCamps.length) addMarkers(supplementaryCamps, ORANGE_ICON);
+
+    const listEl = document.getElementById('search-results');
+    listEl.innerHTML = '';
+
+    camps.forEach((item, index) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <div class="result-title">${item.name}</div>
+            <div class="result-sub">
+                <span class="result-category">${item.category}</span>
+                <span>${item.address}</span>
+            </div>
+        `;
+        li.onclick = () => {
+            hideResults();
+            map.setCenter(new naver.maps.LatLng(item.lat, item.lng));
+            map.setZoom(15);
+            openSheet(item);
+        };
+        listEl.appendChild(li);
+
+        if (index === 0) {
+            map.setCenter(new naver.maps.LatLng(item.lat, item.lng));
+            map.setZoom(15);
+            openSheet(item);
+        }
+    });
+
+    listEl.style.display = 'block';
+}
+
+// 이름으로 캠핑장을 못 찾았을 때의 지명(장소) 검색 폴백.
+// 네이버 지역검색 결과를 지역 단위로 묶어, 동명 지역이 여러 곳이면 목록으로 선택하게 하고
+// 한 곳뿐이면 바로 그 위치 주변 캠핑장을 보여준다.
+async function searchByPlaceName(keyword) {
+    try {
+        const res = await fetch(`/api/nearby-camps?keyword=${encodeURIComponent(keyword)}&raw=1`);
+        const data = await res.json();
+        if (res.ok && data.items && data.items.length) {
+            const candidates = await buildPlaceCandidates(data.items, keyword);
+            if (candidates.length > 1) {
+                showPlaceCandidates(keyword, candidates);
+                return true;
+            }
+            if (candidates.length === 1) {
+                await goToPlace(keyword, candidates[0]);
+                return true;
+            }
+        }
+    } catch (err) {
+        console.error('지역검색 기반 지명 검색 실패:', err);
+    }
+
+    // 지역검색으로도 못 찾았으면 네이버지도 지오코딩으로 한 번 더 시도한다.
+    return new Promise((resolve) => {
+        if (!naver.maps.Service) { resolve(false); return; }
+        naver.maps.Service.geocode({ query: keyword }, async (status, response) => {
+            const addresses = status === naver.maps.Service.Status.OK && response.v2 && response.v2.addresses;
+            if (!addresses || !addresses.length) {
+                resolve(false);
+                return;
+            }
+            const best = addresses[0];
+            await goToPlace(keyword, {
+                address: best.roadAddress || best.jibunAddress || keyword,
+                lat: parseFloat(best.y),
+                lng: parseFloat(best.x),
+            });
+            resolve(true);
+        });
+    });
+}
+
+// 검색어가 이름에 포함된 지역검색 결과를 지오코딩한 뒤, 같은 지역(주소 앞 2단어)끼리 묶어
+// 서로 다른 지역만 후보로 남긴다 (동명이지만 실제로는 같은 곳인 중복 항목 제거).
+async function buildPlaceCandidates(items, keyword) {
+    const relevant = items.filter((it) => it.name.includes(keyword)).slice(0, 8);
+    const geocoded = await Promise.all(relevant.map(async (it) => {
+        const coord = await geocodeAddress(it.address);
+        if (!coord) return null;
+        return { name: it.name, address: coord.address, lat: coord.lat, lng: coord.lng };
+    }));
+
+    const seenRegions = new Map();
+    geocoded.filter(Boolean).forEach((c) => {
+        const regionKey = c.address.split(/\s+/).slice(0, 2).join(' ');
+        if (!seenRegions.has(regionKey)) seenRegions.set(regionKey, c);
+    });
+    return [...seenRegions.values()];
+}
+
+async function goToPlace(keyword, place) {
+    map.setCenter(new naver.maps.LatLng(place.lat, place.lng));
+    map.setZoom(12);
+    showStatus(`'${keyword}' 근처 캠핑장을 찾았어요`, false, 2500);
+    await fetchCampsAt(place.lat, place.lng, 15000);
+}
+
+function showPlaceCandidates(keyword, candidates) {
+    const listEl = document.getElementById('search-results');
+    listEl.innerHTML = '';
+    candidates.forEach((c) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <div class="result-title">${keyword}</div>
+            <div class="result-sub"><span>${c.address}</span></div>
+        `;
+        li.onclick = async () => {
+            hideResults();
+            await goToPlace(keyword, c);
+        };
+        listEl.appendChild(li);
+    });
+    listEl.style.display = 'block';
+    showStatus(`'${keyword}'이(가) 여러 지역에 있어요. 목록에서 선택해주세요.`, false, 3500);
+}
+
+async function fetchCampsAt(lat, lng, radius) {
+    try {
+        const data = await fetchCampsData(lat, lng, radius);
+        renderCamps(data.camps);
+        updateSearchRadiusCircle(lat, lng, radius);
+        const extra = filterGlamping(await fetchNaverSupplementaryCamps(data.camps, lat, lng));
+        if (extra.length) {
+            addMarkers(extra, ORANGE_ICON);
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+function hideResults() {
+    document.getElementById('search-results').style.display = 'none';
+}
+
+function showStatus(text, isError, autoHideMs) {
+    const el = document.getElementById('status-badge');
+    el.innerText = text;
+    el.style.background = isError ? 'rgba(224,49,49,0.85)' : 'rgba(0,0,0,0.7)';
+    el.style.display = 'block';
+    if (autoHideMs) {
+        setTimeout(() => { el.style.display = 'none'; }, autoHideMs);
+    }
+}
+
+function openSheet(item) {
+    const sheet = document.getElementById('bottom-sheet');
+    const gpsBtn = document.getElementById('gps-btn');
+    const titleEl = document.getElementById('camp-title');
+    const categoryEl = document.getElementById('camp-category');
+    const addrEl = document.getElementById('camp-address');
+    const telEl = document.getElementById('camp-tel');
+    const btnRow = document.getElementById('reserve-btn-row');
+
+    titleEl.innerText = item.name;
+    categoryEl.innerText = item.category;
+    addrEl.innerText = item.address;
+    telEl.innerText = item.tel ? `☎ ${item.tel}` : '';
+
+    const buttons = [];
+
+    // 고캠핑의 resveUrl/homepage가 이미 캠핏·땡큐캠핑 링크라면 미리 찾아둔다.
+    // - 이 링크를 '예약하기/홈페이지' 버튼과 '캠핏/땡큐캠핑' 버튼에 중복 표시하지 않기 위해서(아래에서 사용)
+    // - 구글 검색을 거치지 않고 바로 연결하기 위해서
+    const directLinks = detectDirectSiteLinks(item);
+    const primaryCandidateUrl = isReservationWorthyUrl(item.resveUrl)
+        ? item.resveUrl
+        : (isReservationWorthyUrl(item.homepage) ? item.homepage : null);
+    // 예약하기/홈페이지 버튼의 링크가 캠핏이나 땡큐캠핑 버튼과 완전히 같은 결과라면,
+    // 같은 링크를 두 번 보여줄 필요 없이 캠핏/땡큐캠핑 버튼 하나만 남긴다.
+    const primaryDuplicatesSiteButton =
+        !!primaryCandidateUrl &&
+        (primaryCandidateUrl === directLinks.camfit || primaryCandidateUrl === directLinks.thankyoucamping);
+
+    if (item.source === 'naver') {
+        addrEl.innerText += ' (고캠핑 미등록 · 보완 검색 정보)';
+        if (item.placeUrl) {
+            buttons.push({ href: item.placeUrl, label: '상세정보 보기', cls: 'primary' });
+        }
+    } else if (!primaryDuplicatesSiteButton && isReservationWorthyUrl(item.resveUrl)) {
+        buttons.push({
+            href: item.resveUrl,
+            label: item.resveCl ? `예약하기 (${item.resveCl})` : '예약 페이지 바로가기',
+            cls: 'primary',
+            role: 'official',
+        });
+    } else if (!primaryDuplicatesSiteButton && isReservationWorthyUrl(item.homepage)) {
+        buttons.push({ href: item.homepage, label: '홈페이지 바로가기', cls: 'primary' });
+    }
+
+    if (directLinks.camfit) {
+        buttons.push({
+            href: directLinks.camfit,
+            label: '캠핏 예약페이지 바로가기',
+            cls: buttons.length === 0 ? 'primary' : 'secondary',
+            role: 'camfit',
+        });
+    } else {
+        buttons.push({
+            href: null,
+            label: '캠핏 확인 중…',
+            cls: 'disabled',
+            role: 'camfit',
+            pending: true,
+        });
+    }
+
+    if (directLinks.thankyoucamping) {
+        buttons.push({
+            href: directLinks.thankyoucamping,
+            label: '땡큐캠핑 예약페이지 바로가기',
+            cls: buttons.length === 0 ? 'primary' : 'secondary',
+            role: 'thankyoucamping',
+        });
+    } else {
+        buttons.push({
+            href: null,
+            label: '땡큐캠핑 확인 중…',
+            cls: 'disabled',
+            role: 'thankyoucamping',
+            pending: true,
+        });
+    }
+
+    if (directLinks.interpark) {
+        buttons.push({
+            href: directLinks.interpark,
+            label: '인터파크 예약페이지 바로가기',
+            cls: buttons.length === 0 ? 'primary' : 'secondary',
+            role: 'interpark',
+        });
+    } else {
+        buttons.push({
+            href: null,
+            label: '인터파크 확인 중…',
+            cls: 'disabled',
+            role: 'interpark',
+            pending: true,
+        });
+    }
+
+    // 티맵 앱 딥링크(비공식 스킴)로 바로 경로안내. 지도 이동 없이 앱만 열리므로
+    // 다른 버튼과 겹치는 정보가 아니라 항상 추가한다.
+    buttons.push({
+        href: `tmap://route?goalname=${encodeURIComponent(item.name)}&goalx=${item.lng}&goaly=${item.lat}`,
+        label: '티맵으로 안내',
+        cls: 'secondary',
+        noTarget: true, // 커스텀 스킴 링크라 target=_blank를 붙이면 오히려 안 열리는 브라우저가 있다
+    });
+
+    // 검색/선택한 캠핑장을 캠핑 기록(예정 일정)에 바로 추가할 수 있는 버튼.
+    // 실제 저장은 날짜를 입력해야 하므로, 여기서는 캠핑기록 패널을 열고
+    // 이름/주소를 미리 채워준 뒤 사용자가 날짜만 골라 저장하게 한다.
+    buttons.push({
+        label: '📅 이 캠핑장 일정 추가',
+        cls: 'secondary',
+        role: 'add-schedule',
+        onClick: () => openScheduleFormForCamp(item),
+    });
+
+    btnRow.innerHTML = '';
+    btnRow.style.flexDirection = 'column';
+    buttons.forEach((b) => {
+        const a = document.createElement('a');
+        if (b.pending) {
+            a.dataset.pending = '1';
+        } else if (b.onClick) {
+            a.href = '#';
+            a.addEventListener('click', (e) => { e.preventDefault(); b.onClick(); });
+        } else {
+            a.href = b.href;
+            if (!b.noTarget) {
+                a.target = '_blank';
+                a.rel = 'noopener';
+            }
+        }
+        a.className = `reserve-btn ${b.cls}`;
+        a.innerText = b.label;
+        if (b.role) a.dataset.role = b.role;
+        btnRow.appendChild(a);
+    });
+
+    sheet.classList.add('active');
+    gpsBtn.classList.add('shifted');
+
+    // 캠핏/땡큐캠핑 링크를 이미 둘 다 직접 확보했고 official 버튼도 없다면,
+    // 굳이 reservation-link API를 호출할 필요가 없다 (불필요한 백엔드 호출 절감).
+    const hasOfficialButton = buttons.some((b) => b.role === 'official');
+    const hasPendingSite = !directLinks.camfit || !directLinks.thankyoucamping || !directLinks.interpark;
+    if (hasOfficialButton || hasPendingSite) {
+        const region = (item.address || '').split(/\s+/).slice(0, 2).join(' ');
+        upgradeReservationButtons(item.name, btnRow, item.resveUrl, region);
+    }
+}
+
+let sheetGeneration = 0;
+
+function disableButton(btnRow, role, label) {
+    const a = btnRow.querySelector(`[data-role="${role}"]`);
+    if (!a) return;
+    a.removeAttribute('href');
+    a.removeAttribute('target');
+    a.innerText = label;
+    a.className = 'reserve-btn disabled';
+    delete a.dataset.pending;
+}
+
+// '확인 중' 상태였던 버튼에 검증 결과를 반영한다. 찾았으면 직접 링크로,
+// 없는 것이 확인되면 비활성화로 바꾼다. 애매/실패한 경우는 그대로 두고
+// 호출부의 fallbackToSearch()가, 그래도 확인 안 된 애매한 경우는 최종적으로 비활성 표시로 정리한다.
+function resolvePendingButton(btnRow, role, directUrl, confirmedAbsent, foundLabel, notFoundLabel) {
+    const a = btnRow.querySelector(`[data-role="${role}"]`);
+    if (!a) return;
+    if (directUrl) {
+        a.href = directUrl;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.innerText = foundLabel;
+        a.className = 'reserve-btn primary';
+        delete a.dataset.pending;
+    } else if (confirmedAbsent) {
+        disableButton(btnRow, role, notFoundLabel);
+    }
+}
+
+// 검증이 실패했거나 결과가 애매해 여전히 '확인 중' 상태로 남은 버튼은, 구글 검색으로
+// 대체하면 이름만 비슷한 다른 캠핑장으로 잘못 안내할 위험이 있다(예: '두리캠핑장' 검색이
+// 전혀 다른 지역의 '원주두리 2캠핑장' 등을 보여줌). 그래서 링크로 연결하는 대신,
+// '없는 캠핑장'과 같은 회색 비활성 상태로 정직하게 "못 찾았다"고만 표시한다.
+function fallbackToSearch(btnRow, role) {
+    const a = btnRow.querySelector(`[data-role="${role}"]`);
+    if (!a || a.dataset.pending !== '1') return;
+    disableButton(btnRow, role, '정확한 링크를 못 찾았어요');
+}
+
+async function upgradeReservationButtons(name, btnRow, officialUrl, region) {
+    const myGen = ++sheetGeneration;
+    try {
+        const officialParam = officialUrl ? `&officialUrl=${encodeURIComponent(officialUrl)}` : '';
+        const regionParam = region ? `&region=${encodeURIComponent(region)}` : '';
+        const res = await fetch(`/api/reservation-link?name=${encodeURIComponent(name)}${officialParam}${regionParam}`);
+        const data = await res.json();
+        if (!res.ok || myGen !== sheetGeneration) return;
+
+        if (data.officialValid === false) {
+            const a = btnRow.querySelector('[data-role="official"]');
+            if (a) {
+                a.href = `https://search.naver.com/search.naver?query=${encodeURIComponent(name + ' 예약')}`;
+                a.innerText = `'${name}' 검색결과 보기 (기존 링크 접속 불가)`;
+                a.className = 'reserve-btn primary';
+            }
+        }
+
+        resolvePendingButton(
+            btnRow, 'camfit', data.camfit,
+            data.candidateFound && data.candidateFound.camfit === false,
+            '캠핏 예약페이지 바로가기', '캠핏에 없는 캠핑장'
+        );
+        resolvePendingButton(
+            btnRow, 'thankyoucamping', data.thankyoucamping,
+            data.candidateFound && data.candidateFound.thankyoucamping === false,
+            '땡큐캠핑 예약페이지 바로가기', '땡큐캠핑에 없는 캠핑장'
+        );
+        resolvePendingButton(
+            btnRow, 'interpark', data.interpark,
+            data.candidateFound && data.candidateFound.interpark === false,
+            '인터파크 예약페이지 바로가기', '인터파크에 없는 캠핑장'
+        );
+    } catch (err) {
+        console.error('예약페이지 확인 실패:', err);
+    } finally {
+        if (myGen === sheetGeneration) {
+            fallbackToSearch(btnRow, 'camfit');
+            fallbackToSearch(btnRow, 'thankyoucamping');
+            fallbackToSearch(btnRow, 'interpark');
+        }
+    }
+}
+
+function closeSheet() {
+    const sheet = document.getElementById('bottom-sheet');
+    sheet.classList.remove('active');
+    sheet.style.transform = '';
+    document.getElementById('sheet-backdrop').classList.remove('active');
+    document.getElementById('gps-btn').classList.remove('shifted');
+}
+
+// 바텀 시트: 배경 탭 / 아래로 스와이프로 닫기 (닫기 버튼이 작아 잘 안 눌리는 문제 해결)
+(function setupSheetDismiss(){
+    const attach = () => {
+        const sheet = document.getElementById('bottom-sheet');
+        const backdrop = document.getElementById('sheet-backdrop');
+        const grab = sheet && sheet.querySelector('.sheet-grab');
+        if(!sheet || !backdrop) { return; }
+        backdrop.addEventListener('click', closeSheet);
+
+        let startY = 0, dy = 0, dragging = false;
+        const onDown = (e) => {
+            startY = (e.touches ? e.touches[0].clientY : e.clientY);
+            dy = 0; dragging = true;
+            sheet.classList.add('dragging');
+        };
+        const onMove = (e) => {
+            if(!dragging) return;
+            const y = (e.touches ? e.touches[0].clientY : e.clientY);
+            dy = Math.max(0, y - startY); // 아래로만
+            sheet.style.transform = 'translateY(' + dy + 'px)';
+        };
+        const onUp = () => {
+            if(!dragging) return;
+            dragging = false;
+            sheet.classList.remove('dragging');
+            if(dy > 90){ closeSheet(); }
+            else { sheet.style.transform = ''; }
+        };
+        // 손잡이 영역과 헤더에서 끌어내리기 시작 가능
+        [grab, sheet.querySelector('.sheet-header')].forEach(el => {
+            if(!el) return;
+            el.addEventListener('touchstart', onDown, { passive: true });
+            el.addEventListener('mousedown', onDown);
+        });
+        window.addEventListener('touchmove', onMove, { passive: true });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('touchend', onUp);
+        window.addEventListener('mouseup', onUp);
+    };
+    if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', attach);
+    else attach();
+})();
+
+// ============================================================
+// ---- 공휴일 연동 커스텀 날짜 선택기 ----
+// ============================================================
+const holidayCache = {}; // { year: { 'YYYY-MM-DD': '휴일명' } }
+let datepickerTargetInput = null;
+let datepickerViewYear = new Date().getFullYear();
+let datepickerViewMonth = new Date().getMonth(); // 0-11
+let datepickerPopupEl = null;
+
+function formatDateISO(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function ensureDatepickerPopup() {
+    if (datepickerPopupEl) return datepickerPopupEl;
+    const el = document.createElement('div');
+    el.className = 'datepicker-popup';
+    el.id = 'datepicker-popup';
+    el.innerHTML = `
+        <div class="datepicker-header">
+            <button type="button" class="datepicker-nav-btn" onclick="shiftDatepickerMonth(-1)">‹</button>
+            <span class="datepicker-title" id="datepicker-title"></span>
+            <button type="button" class="datepicker-nav-btn" onclick="shiftDatepickerMonth(1)">›</button>
+        </div>
+        <div class="datepicker-weekdays">
+            <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+        </div>
+        <div class="datepicker-days" id="datepicker-days"></div>
+        <div class="datepicker-footer">공휴일은 빨간색으로 표시돼요</div>
+    `;
+    document.body.appendChild(el);
+    datepickerPopupEl = el;
+    return el;
+}
+
+// 네이버 지도 같은 공휴일 표기를 위해, 연도별 대한민국 공휴일 정보를 서버(api/holidays)를 통해 가져와 캐시한다.
+async function fetchHolidays(year) {
+    if (holidayCache[year]) return holidayCache[year];
+    try {
+        const res = await fetch(`/api/holidays?year=${year}`);
+        const data = await res.json();
+        const map = {};
+        (data.holidays || []).forEach((h) => { map[h.date] = h.name; });
+        holidayCache[year] = map;
+        return map;
+    } catch (err) {
+        console.error('공휴일 정보를 불러오지 못했습니다:', err);
+        return {};
+    }
+}
+
+function openDatePicker(inputEl) {
+    datepickerTargetInput = inputEl;
+    const popup = ensureDatepickerPopup();
+
+    const existing = inputEl.value;
+    const baseDate = existing ? new Date(existing + 'T00:00:00') : new Date();
+    datepickerViewYear = baseDate.getFullYear();
+    datepickerViewMonth = baseDate.getMonth();
+
+    const rect = inputEl.getBoundingClientRect();
+    popup.style.top = `${rect.bottom + window.scrollY + 6}px`;
+    popup.style.left = `${Math.max(8, Math.min(rect.left + window.scrollX, window.innerWidth - 296))}px`;
+    popup.classList.add('active');
+
+    renderDatepicker();
+}
+
+function closeDatePicker() {
+    if (datepickerPopupEl) datepickerPopupEl.classList.remove('active');
+    datepickerTargetInput = null;
+}
+
+function shiftDatepickerMonth(delta) {
+    datepickerViewMonth += delta;
+    if (datepickerViewMonth < 0) { datepickerViewMonth = 11; datepickerViewYear--; }
+    if (datepickerViewMonth > 11) { datepickerViewMonth = 0; datepickerViewYear++; }
+    renderDatepicker();
+}
+
+async function renderDatepicker() {
+    const titleEl = document.getElementById('datepicker-title');
+    const daysEl = document.getElementById('datepicker-days');
+    const requestedLabel = `${datepickerViewYear}년 ${datepickerViewMonth + 1}월`;
+    titleEl.innerText = requestedLabel;
+
+    const holidays = await fetchHolidays(datepickerViewYear);
+    // 공휴일 로딩 중 사용자가 다른 달로 이동했다면, 이미 지나간 요청이므로 그리지 않는다.
+    if (titleEl.innerText !== requestedLabel) return;
+
+    const firstOfMonth = new Date(datepickerViewYear, datepickerViewMonth, 1);
+    const startWeekday = firstOfMonth.getDay(); // 0=일요일
+    const daysInMonth = new Date(datepickerViewYear, datepickerViewMonth + 1, 0).getDate();
+    const daysInPrevMonth = new Date(datepickerViewYear, datepickerViewMonth, 0).getDate();
+    const totalCells = Math.ceil((startWeekday + daysInMonth) / 7) * 7;
+
+    const cells = [];
+    for (let i = startWeekday - 1; i >= 0; i--) {
+        cells.push({ day: daysInPrevMonth - i, other: true, month: datepickerViewMonth - 1 });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+        cells.push({ day: d, other: false, month: datepickerViewMonth });
+    }
+    let nextDay = 1;
+    while (cells.length < totalCells) {
+        cells.push({ day: nextDay++, other: true, month: datepickerViewMonth + 1 });
+    }
+
+    const todayStr = formatDateISO(new Date());
+    const selectedStr = datepickerTargetInput ? datepickerTargetInput.value : '';
+
+    daysEl.innerHTML = '';
+    cells.forEach((cell, idx) => {
+        const weekday = idx % 7;
+        let cellYear = datepickerViewYear;
+        let cellMonth = cell.month;
+        if (cellMonth < 0) { cellMonth = 11; cellYear -= 1; }
+        else if (cellMonth > 11) { cellMonth = 0; cellYear += 1; }
+        const dateObj = new Date(cellYear, cellMonth, cell.day);
+        const dateStr = formatDateISO(dateObj);
+        const holidayName = !cell.other ? holidays[dateStr] : null;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'datepicker-day';
+        if (cell.other) btn.classList.add('other-month');
+        if (weekday === 0) btn.classList.add('sunday');
+        if (weekday === 6) btn.classList.add('saturday');
+        if (holidayName) { btn.classList.add('holiday'); btn.title = holidayName; }
+        if (!cell.other && dateStr === todayStr) btn.classList.add('today');
+        if (!cell.other && dateStr === selectedStr) btn.classList.add('selected');
+        if (cell.other) btn.disabled = true;
+
+        btn.innerHTML = `${cell.day}${holidayName ? '<span class="holiday-dot"></span>' : ''}`;
+        if (!cell.other) {
+            btn.onclick = () => selectDatepickerDate(dateStr);
+        }
+        daysEl.appendChild(btn);
+    });
+}
+
+function selectDatepickerDate(dateStr) {
+    if (datepickerTargetInput) {
+        datepickerTargetInput.value = dateStr;
+    }
+    closeDatePicker();
+}
+
+document.addEventListener('click', (e) => {
+    if (!datepickerPopupEl || !datepickerPopupEl.classList.contains('active')) return;
+    const isDateInput = e.target.classList && e.target.classList.contains('date-input');
+    if (!datepickerPopupEl.contains(e.target) && !isDateInput) {
+        closeDatePicker();
+    }
+});
+
+// ============================================================
+// ---- 텍스트 입력 자동완성 (공용) ----
+// ============================================================
+// iOS Safari는 <input list="...">(datalist) 드롭다운을 사실상 지원하지 않아,
+// 저장된 값(장비 종류/제조사, 즐겨찾는 메뉴 등)을 골라 쓰는 자동완성은 전부
+// 이 커스텀 드롭다운으로 통일해서 처리한다.
+function wireTextSuggestions(inputEl, listEl, getOptionsFn) {
+    if (!inputEl || !listEl) return;
+
+    function show() {
+        const query = inputEl.value.trim().toLowerCase();
+        const options = [...new Set(getOptionsFn().filter(Boolean))]
+            .filter((o) => !query || o.toLowerCase().includes(query));
+        if (options.length === 0) {
+            listEl.style.display = 'none';
+            listEl.innerHTML = '';
+            return;
+        }
+        listEl.innerHTML = options.map((o) => `<li>${o}</li>`).join('');
+        Array.from(listEl.children).forEach((li, i) => {
+            // blur보다 먼저 발생하도록 mousedown에서 선택 처리 (클릭 직전 목록이 닫히는 것 방지)
+            li.onmousedown = (e) => {
+                e.preventDefault();
+                inputEl.value = options[i];
+                listEl.style.display = 'none';
+                listEl.innerHTML = '';
+            };
+        });
+        listEl.style.display = 'block';
+    }
+
+    inputEl.addEventListener('focus', show);
+    inputEl.addEventListener('input', show);
+    inputEl.addEventListener('blur', () => {
+        setTimeout(() => { listEl.style.display = 'none'; }, 150);
+    });
+}
+
+// ============================================================
+// ---- 좌측 사이드바 뷰 전환 ----
+// ============================================================
+// 새 패널(음식/기록/장비)은 등유 리스트와 같은 위치에 반투명하게 뜨므로,
+// 지도·검색창·GPS버튼은 그대로 두고 등유 리스트만 자리를 비켜준다.
+const MAP_ONLY_ELEMENT_IDS = ['fuel-price-list'];
+
+function switchView(view) {
+    archivePastTrips();
+
+    ['map', 'food', 'records', 'gear'].forEach((v) => {
+        const btn = document.getElementById(`sidebar-btn-${v}`);
+        if (btn) btn.classList.toggle('active', v === view);
+        const panel = document.getElementById(`view-${v}`);
+        if (panel) panel.classList.toggle('active', v === view);
+    });
+
+    MAP_ONLY_ELEMENT_IDS.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = view === 'map' ? '' : 'none';
+    });
+
+    if (view !== 'map') {
+        closeSheet();
+        hideResults();
+    }
+
+    if (view === 'food') renderFoodView();
+    if (view === 'records') renderRecordsView();
+    if (view === 'gear') renderGearView();
+}
+
+// ============================================================
+// ---- 캠핑 음식 (예정 일정 + 날짜별로 연동) ----
+// ============================================================
+const FOOD_STORAGE_KEY = 'campmap_food_v4';
+const FOOD_MEALS = [
+    { key: 'breakfast', label: '아침' },
+    { key: 'lunch', label: '점심' },
+    { key: 'dinner', label: '저녁' },
+];
+const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+let activeFoodTripId = null;
+// 저장된 음식 계획을 다시 고치기 전까지는 읽기 전용으로 보여주기 위한 화면 상태(저장되지 않음, 새로고침 시 초기화).
+let activeFoodEditing = false;
+
+function loadFoodData() {
+    try {
+        const raw = localStorage.getItem(FOOD_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        return { trips: parsed.trips || {} };
+    } catch (e) {
+        return { trips: {} };
+    }
+}
+function saveFoodData(data, skipSync) {
+    try { localStorage.setItem(FOOD_STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+    if (!skipSync) debouncedSync();
+}
+let foodData = loadFoodData();
+
+function ensureTripFoodBucket(tripId) {
+    if (!foodData.trips[tripId]) {
+        foodData.trips[tripId] = { days: {} };
+    }
+    return foodData.trips[tripId];
+}
+
+function ensureDayMealEntry(tripId, dateStr, mealKey, defaultIncluded) {
+    const bucket = ensureTripFoodBucket(tripId);
+    if (!bucket.days[dateStr]) bucket.days[dateStr] = {};
+    if (!bucket.days[dateStr][mealKey]) {
+        bucket.days[dateStr][mealKey] = { included: defaultIncluded, items: [] };
+    }
+    return bucket.days[dateStr][mealKey];
+}
+
+// 입실일은 점심부터(아침은 아예 선택지에 없음), 퇴실일은 아침까지만(점심·저녁은 선택지에 없음).
+// 입실=퇴실인 하루짜리 일정은 세 끼 모두 선택 가능.
+function mealsForDay(dateStr, trip) {
+    const isCheckIn = dateStr === trip.startDate;
+    const isCheckOut = !!trip.endDate && dateStr === trip.endDate;
+    if (isCheckIn && !isCheckOut) return ['lunch', 'dinner'];
+    if (isCheckOut && !isCheckIn) return ['breakfast'];
+    return ['breakfast', 'lunch', 'dinner'];
+}
+
+// 시작일~종료일(포함) 사이의 모든 날짜를 'YYYY-MM-DD' 문자열 배열로 만든다.
+function generateDateRange(start, end) {
+    if (!start) return [];
+    const startD = new Date(start + 'T00:00:00');
+    const endD = end ? new Date(end + 'T00:00:00') : startD;
+    if (isNaN(startD) || isNaN(endD) || endD < startD) return [start];
+    const days = [];
+    const cur = new Date(startD);
+    while (cur <= endD) {
+        days.push(formatDateISO(cur));
+        cur.setDate(cur.getDate() + 1);
+    }
+    return days;
+}
+
+function tripDateLabel(trip) {
+    if (!trip.startDate) return '';
+    return (trip.endDate && trip.endDate !== trip.startDate) ? `${trip.startDate}~${trip.endDate}` : trip.startDate;
+}
+
+// 음식 뷰를 열 때: 예정 일정 목록을 드롭다운으로 보여주고, 선택된 일정의 음식 계획을 보여준다.
+function renderFoodView() {
+    renderFoodPresets();
+
+    const select = document.getElementById('food-trip-select');
+    const noTripMsg = document.getElementById('food-no-trip-msg');
+    const bodyEl = document.getElementById('food-trip-body');
+    const restaurantSection = document.getElementById('food-restaurant-section');
+
+    const trips = [...recordsData.upcoming].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+
+    if (trips.length === 0) {
+        select.style.display = 'none';
+        noTripMsg.style.display = 'block';
+        bodyEl.style.display = 'none';
+        restaurantSection.style.display = 'none';
+        activeFoodTripId = null;
+        return;
+    }
+
+    noTripMsg.style.display = 'none';
+    select.style.display = '';
+    bodyEl.style.display = '';
+    restaurantSection.style.display = '';
+
+    select.innerHTML = trips.map((t) => {
+        const dateLabel = tripDateLabel(t);
+        return `<option value="${t.id}">${t.title}${dateLabel ? ' (' + dateLabel + ')' : ''}</option>`;
+    }).join('');
+
+    if (!activeFoodTripId || !trips.some((t) => t.id === activeFoodTripId)) {
+        activeFoodTripId = trips[0].id;
+    }
+    select.value = activeFoodTripId;
+
+    renderFoodDaysList();
+}
+
+// 일정 선택이 바뀌면 음식 목록도 그 일정 것으로 바뀌고, 지도도 해당 캠핑장 위치로 이동한다.
+function onFoodTripChange() {
+    activeFoodTripId = document.getElementById('food-trip-select').value;
+    activeFoodEditing = false;
+    const trip = recordsData.upcoming.find((t) => t.id === activeFoodTripId);
+    if (trip && map && trip.lat && trip.lng) {
+        map.setCenter(new naver.maps.LatLng(trip.lat, trip.lng));
+        map.setZoom(15);
+    }
+    document.getElementById('restaurant-list').innerHTML = '';
+    document.getElementById('restaurant-status').innerText = '';
+    renderFoodDaysList();
+}
+
+// 선택된 일정의 입실~퇴실 기간을 날짜별 카드로 나열한다. 각 카드 안에 그 날짜에
+// 해당하는 끼니(입실일=점심·저녁만, 퇴실일=아침만, 그 외=세 끼 모두)를 전부 보여주고,
+// 각 끼니마다 −버튼으로 제외(항목은 보존되고 숨김), 제외된 끼니는 +버튼으로 다시 추가한다.
+// 이미 '저장'된 계획은 읽기전용 요약으로 보여주고, '수정' 버튼을 눌러야 다시 편집할 수 있다.
+function renderFoodDaysList() {
+    const listEl = document.getElementById('food-days-list');
+    listEl.innerHTML = '';
+    if (!activeFoodTripId) return;
+    const trip = recordsData.upcoming.find((t) => t.id === activeFoodTripId);
+    if (!trip) return;
+
+    const bucket = ensureTripFoodBucket(activeFoodTripId);
+
+    if (bucket.saved && !activeFoodEditing) {
+        renderFoodReadOnly(trip, bucket);
+        return;
+    }
+
+    const dates = generateDateRange(trip.startDate, trip.endDate);
+    if (dates.length === 0) {
+        listEl.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:12px 0;">이 일정에는 날짜가 없어요. 캠핑 기록에서 시작일을 먼저 입력해주세요.</div>';
+        return;
+    }
+
+    dates.forEach((dateStr) => {
+        const dow = WEEKDAY_LABELS[new Date(dateStr + 'T00:00:00').getDay()];
+        const isCheckIn = dateStr === trip.startDate;
+        const isCheckOut = !!trip.endDate && dateStr === trip.endDate;
+        const tags = [];
+        if (isCheckIn) tags.push('입실');
+        if (isCheckOut) tags.push('퇴실');
+        const tagLabel = tags.length ? ` · ${tags.join('/')}` : '';
+        const dateLabel = `${dateStr.slice(5).replace('-', '/')} (${dow})`;
+
+        const card = document.createElement('div');
+        card.className = 'food-day-card';
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'food-day-title';
+        titleEl.innerText = `${dateLabel}${tagLabel}`;
+        card.appendChild(titleEl);
+
+        const mealKeys = mealsForDay(dateStr, trip);
+        const mealsGrid = document.createElement('div');
+        mealsGrid.className = 'food-meals-grid';
+        mealsGrid.style.gridTemplateColumns = `repeat(${mealKeys.length}, 1fr)`;
+        card.appendChild(mealsGrid);
+
+        mealKeys.forEach((mealKey) => {
+            const entry = ensureDayMealEntry(activeFoodTripId, dateStr, mealKey, true);
+            const mealLabel = FOOD_MEALS.find((m) => m.key === mealKey).label;
+
+            if (entry.included) {
+                const block = document.createElement('div');
+                block.className = 'food-meal-block';
+                block.innerHTML = `
+                    <div class="food-meal-header">
+                        <span>${mealLabel}</span>
+                        <button type="button" class="food-meal-remove-btn" title="이 날 ${mealLabel} 제외">−</button>
+                    </div>
+                    <div class="food-meal-items"></div>
+                    <div class="add-row">
+                        <div class="autocomplete-wrap">
+                            <input type="text" class="add-input food-meal-input" placeholder="메뉴 추가" autocomplete="off">
+                            <ul class="autocomplete-list food-meal-suggestions"></ul>
+                        </div>
+                        <button class="add-btn food-meal-add-btn">추가</button>
+                    </div>
+                `;
+                block.querySelector('.food-meal-remove-btn').onclick = () => {
+                    entry.included = false;
+                    saveFoodData(foodData);
+                    renderFoodDaysList();
+                };
+
+                const itemsEl = block.querySelector('.food-meal-items');
+                if (entry.items.length === 0) {
+                    itemsEl.innerHTML = '<div style="color:#adb5bd; font-size:11px; padding:2px 0;">없음</div>';
+                }
+                entry.items.forEach((item) => {
+                    const itemCard = document.createElement('div');
+                    itemCard.className = 'item-card';
+                    itemCard.innerHTML = `
+                        <input type="checkbox" class="item-checkbox" ${item.checked ? 'checked' : ''}>
+                        <span class="item-name ${item.checked ? 'checked' : ''}">${item.name}</span>
+                        <button class="item-del-btn">✕</button>
+                    `;
+                    itemCard.querySelector('.item-checkbox').onchange = () => toggleFoodItem(dateStr, mealKey, item.id);
+                    itemCard.querySelector('.item-del-btn').onclick = () => deleteFoodItem(dateStr, mealKey, item.id);
+                    itemsEl.appendChild(itemCard);
+                });
+
+                const mealInput = block.querySelector('.food-meal-input');
+                const submit = () => { if (addFoodItemToMeal(dateStr, mealKey, mealInput.value)) mealInput.value = ''; };
+                block.querySelector('.food-meal-add-btn').onclick = submit;
+                mealInput.onkeyup = (e) => { if (e.keyCode === 13) submit(); };
+                wireTextSuggestions(mealInput, block.querySelector('.food-meal-suggestions'), () => foodPresets.map((p) => p.name));
+
+                mealsGrid.appendChild(block);
+            } else {
+                const restoreBtn = document.createElement('button');
+                restoreBtn.type = 'button';
+                restoreBtn.className = 'food-meal-restore-btn';
+                restoreBtn.innerText = `+ ${mealLabel}`;
+                restoreBtn.onclick = () => {
+                    entry.included = true;
+                    saveFoodData(foodData);
+                    renderFoodDaysList();
+                };
+                mealsGrid.appendChild(restoreBtn);
+            }
+        });
+
+        listEl.appendChild(card);
+    });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'add-btn';
+    saveBtn.style.cssText = 'width:100%; padding:13px; font-size:14px; margin-top:4px;';
+    saveBtn.innerText = '💾 이 음식 계획 저장';
+    saveBtn.onclick = () => {
+        bucket.saved = true;
+        activeFoodEditing = false;
+        saveFoodData(foodData);
+        renderFoodDaysList();
+        renderRecordsUpcomingBadgeIfOpen();
+    };
+    listEl.appendChild(saveBtn);
+}
+
+// 저장된 음식 계획을 읽기 전용 요약으로 보여준다. 체크/추가/삭제는 할 수 없고,
+// '수정' 버튼을 눌러야 다시 편집 가능한 화면으로 전환된다.
+function renderFoodReadOnly(trip, bucket) {
+    const listEl = document.getElementById('food-days-list');
+    listEl.innerHTML = '';
+
+    const banner = document.createElement('div');
+    banner.className = 'food-saved-banner';
+    banner.innerHTML = `
+        <span>✅ 저장된 음식 계획</span>
+        <button type="button" class="add-btn food-saved-edit-btn">✏️ 수정</button>
+    `;
+    banner.querySelector('button').onclick = () => {
+        activeFoodEditing = true;
+        renderFoodDaysList();
+    };
+    listEl.appendChild(banner);
+
+    const dates = generateDateRange(trip.startDate, trip.endDate);
+    dates.forEach((dateStr) => {
+        const dow = WEEKDAY_LABELS[new Date(dateStr + 'T00:00:00').getDay()];
+        const isCheckIn = dateStr === trip.startDate;
+        const isCheckOut = !!trip.endDate && dateStr === trip.endDate;
+        const tags = [];
+        if (isCheckIn) tags.push('입실');
+        if (isCheckOut) tags.push('퇴실');
+        const tagLabel = tags.length ? ` · ${tags.join('/')}` : '';
+        const dateLabel = `${dateStr.slice(5).replace('-', '/')} (${dow})`;
+
+        const card = document.createElement('div');
+        card.className = 'food-day-card';
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'food-day-title';
+        titleEl.innerText = `${dateLabel}${tagLabel}`;
+        card.appendChild(titleEl);
+
+        const mealKeys = mealsForDay(dateStr, trip);
+        const mealsGrid = document.createElement('div');
+        mealsGrid.className = 'food-meals-grid';
+        mealsGrid.style.gridTemplateColumns = `repeat(${mealKeys.length}, 1fr)`;
+        card.appendChild(mealsGrid);
+
+        mealKeys.forEach((mealKey) => {
+            const dayMeals = bucket.days[dateStr] || {};
+            const entry = dayMeals[mealKey];
+            if (!entry || !entry.included) return;
+            const mealLabel = FOOD_MEALS.find((m) => m.key === mealKey).label;
+
+            const block = document.createElement('div');
+            block.className = 'food-meal-block';
+            const itemsHtml = entry.items.length
+                ? entry.items.map((item) => `<div class="item-name${item.checked ? ' checked' : ''}" style="padding:2px 0;">${item.name}</div>`).join('')
+                : '<div style="color:#adb5bd; font-size:11px; padding:2px 0;">없음</div>';
+            block.innerHTML = `
+                <div class="food-meal-header"><span>${mealLabel}</span></div>
+                ${itemsHtml}
+            `;
+            mealsGrid.appendChild(block);
+        });
+
+        listEl.appendChild(card);
+    });
+}
+
+// 캠핑 기록 패널이 지금 열려있다면(저장 직후) 예정 일정 카드의 '음식 계획 저장됨' 배지도 바로 갱신한다.
+function renderRecordsUpcomingBadgeIfOpen() {
+    const panel = document.getElementById('view-records');
+    if (panel && panel.classList.contains('active')) renderRecordsView();
+}
+
+
+// 특정 일정 · 날짜 · 끼니에 메뉴를 추가하는 공통 로직. 직접 입력한 값이든,
+// 즐겨찾는 메뉴에서 불러온 값이든 여기로 모인다.
+function addFoodItemToMeal(dateStr, mealKey, name) {
+    if (!activeFoodTripId || !dateStr || !mealKey) { alert('먼저 캠핑 일정을 선택해주세요.'); return false; }
+    const trimmed = (name || '').trim();
+    if (!trimmed) return false;
+    const entry = ensureDayMealEntry(activeFoodTripId, dateStr, mealKey, true);
+    entry.items.push({ id: Date.now() + Math.random().toString(16).slice(2), name: trimmed, checked: false });
+    saveFoodData(foodData);
+    renderFoodDaysList();
+    return true;
+}
+
+function toggleFoodItem(dateStr, mealKey, id) {
+    if (!activeFoodTripId) return;
+    const entry = ensureDayMealEntry(activeFoodTripId, dateStr, mealKey, true);
+    const item = entry.items.find((i) => i.id === id);
+    if (item) item.checked = !item.checked;
+    saveFoodData(foodData);
+    renderFoodDaysList();
+}
+function deleteFoodItem(dateStr, mealKey, id) {
+    if (!activeFoodTripId) return;
+    const entry = ensureDayMealEntry(activeFoodTripId, dateStr, mealKey, true);
+    const item = entry.items.find((i) => i.id === id);
+    if (item && item.name && !confirm(`'${item.name}'을(를) 삭제할까요?`)) return;
+    entry.items = entry.items.filter((i) => i.id !== id);
+    saveFoodData(foodData);
+    renderFoodDaysList();
+}
+
+// ---- 즐겨찾는 메뉴/밀키트 (일정과 무관하게 항상 저장되는 나만의 목록) ----
+const FOOD_PRESETS_KEY = 'campmap_food_presets_v1';
+
+function loadFoodPresets() {
+    try {
+        const raw = localStorage.getItem(FOOD_PRESETS_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        return [];
+    }
+}
+function saveFoodPresets(data, skipSync) {
+    try { localStorage.setItem(FOOD_PRESETS_KEY, JSON.stringify(data)); } catch (e) {}
+    if (!skipSync) debouncedSync();
+}
+let foodPresets = loadFoodPresets();
+
+// 저장된 밀키트를 '밀키트 내역' 드롭다운과, 각 끼니 입력창의 자동완성(datalist)에 반영한다.
+function renderFoodPresets() {
+    const historySelect = document.getElementById('food-preset-history');
+
+    if (foodPresets.length === 0) {
+        historySelect.innerHTML = '<option value="">저장된 밀키트가 없어요</option>';
+        historySelect.disabled = true;
+    } else {
+        historySelect.disabled = false;
+        const prevValue = historySelect.value;
+        historySelect.innerHTML = foodPresets.map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
+        if (foodPresets.some((p) => p.id === prevValue)) historySelect.value = prevValue;
+    }
+}
+
+function addFoodPreset() {
+    const input = document.getElementById('food-preset-input');
+    const name = input.value.trim();
+    if (!name) return;
+    foodPresets.push({ id: Date.now() + Math.random().toString(16).slice(2), name });
+    saveFoodPresets(foodPresets);
+    input.value = '';
+    renderFoodPresets();
+}
+
+function deleteSelectedPreset() {
+    const select = document.getElementById('food-preset-history');
+    const id = select ? select.value : '';
+    if (!id) return;
+    const preset = foodPresets.find((p) => p.id === id);
+    if (preset && !confirm(`'${preset.name}'을(를) 즐겨찾기에서 삭제할까요?`)) return;
+    foodPresets = foodPresets.filter((p) => p.id !== id);
+    saveFoodPresets(foodPresets);
+    renderFoodPresets();
+}
+
+// ---- 주변 맛집 추천 (선택된 일정의 캠핑장 위치 기준) ----
+async function findNearbyRestaurants() {
+    const statusEl = document.getElementById('restaurant-status');
+    const listEl = document.getElementById('restaurant-list');
+    listEl.innerHTML = '';
+
+    const trip = recordsData.upcoming.find((t) => t.id === activeFoodTripId);
+    if (!trip) {
+        statusEl.innerText = '먼저 캠핑 일정을 선택해주세요.';
+        return;
+    }
+
+    statusEl.innerText = `'${trip.title}' 주변 맛집 찾는 중...`;
+
+    let region = '';
+    try {
+        if (trip.lat && trip.lng) {
+            region = await reverseGeocodeRegion(trip.lat, trip.lng);
+        }
+        if (!region && trip.note) {
+            // 위경도가 없는 수동 입력 일정은, 메모에 채워진 주소의 앞 2단어를 지역명으로 사용한다.
+            region = trip.note.trim().split(/\s+/).slice(0, 2).join(' ');
+        }
+    } catch (e) {}
+
+    if (!region) {
+        statusEl.innerText = '이 일정에는 위치 정보가 없어요. 이름 입력 시 뜨는 자동완성에서 캠핑장을 선택해주세요.';
+        return;
+    }
+
+    const keyword = `${region} 맛집`;
+    try {
+        const res = await fetch(`/api/nearby-restaurants?keyword=${encodeURIComponent(keyword)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '맛집 정보를 불러오지 못했습니다.');
+        renderRestaurantResults(data.items || []);
+        statusEl.innerText = (data.items && data.items.length)
+            ? `'${trip.title}' 주변 맛집 ${data.items.length}곳`
+            : '주변 맛집 정보를 찾지 못했어요.';
+    } catch (err) {
+        console.error(err);
+        statusEl.innerText = err.message || '맛집 정보를 불러오지 못했습니다.';
+    }
+}
+
+function renderRestaurantResults(items) {
+    const listEl = document.getElementById('restaurant-list');
+    listEl.innerHTML = '';
+    items.forEach((it) => {
+        const card = document.createElement('div');
+        card.className = 'restaurant-card';
+        card.innerHTML = `
+            <div class="restaurant-name">${it.name}</div>
+            <div class="restaurant-meta">${[it.category, it.address].filter(Boolean).join(' · ')}</div>
+            <a class="restaurant-link" href="https://map.naver.com/p/search/${encodeURIComponent(it.name)}" target="_blank" rel="noopener">네이버지도에서 보기 →</a>
+        `;
+        listEl.appendChild(card);
+    });
+}
+
+// ============================================================
+// ---- 캠핑 기록 (예정 일정 + 지난 기록) ----
+// ============================================================
+const RECORDS_STORAGE_KEY = 'campmap_records_v2';
+let activeRecordsTab = 'upcoming';
+
+function loadRecordsData() {
+    try {
+        const raw = localStorage.getItem(RECORDS_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        return { upcoming: parsed.upcoming || [], history: parsed.history || [] };
+    } catch (e) {
+        return { upcoming: [], history: [] };
+    }
+}
+function saveRecordsData(data, skipSync) {
+    try {
+        const serialized = JSON.stringify(data);
+        localStorage.setItem(RECORDS_STORAGE_KEY, serialized);
+        if (localStorage.getItem(RECORDS_STORAGE_KEY) !== serialized) throw new Error('저장 확인 실패');
+    } catch (e) {
+        console.error('캠핑 일정 로컬 저장 실패:', e);
+        if (!skipSync) alert('일정을 기기에 저장하지 못했습니다. 저장 공간 및 Safari 설정을 확인해 주세요.');
+        return false;
+    }
+    if (!skipSync) debouncedSync();
+    return true;
+}
+let recordsData = loadRecordsData();
+
+// 퇴실일(없으면 시작일) 낮 12시가 지난 예정 일정은 자동으로 '지난 기록'으로 옮긴다.
+// id를 그대로 유지해서 foodData.trips[id]에 저장된 음식 계획이 계속 연결되게 하고,
+// 그 계획을 사람이 읽을 수 있는 요약으로 만들어 메모에 함께 남긴다.
+function checkoutDeadline(trip) {
+    const dateStr = trip.endDate || trip.startDate;
+    if (!dateStr) return null;
+    const d = new Date(dateStr + 'T12:00:00');
+    return isNaN(d) ? null : d;
+}
+
+function buildFoodSummaryLines(tripId) {
+    const bucket = foodData.trips[tripId];
+    if (!bucket || !bucket.days) return [];
+    const lines = [];
+    Object.keys(bucket.days).sort().forEach((dateStr) => {
+        const dayMeals = bucket.days[dateStr];
+        const dow = WEEKDAY_LABELS[new Date(dateStr + 'T00:00:00').getDay()];
+        FOOD_MEALS.forEach((meal) => {
+            const entry = dayMeals[meal.key];
+            if (entry && entry.included && entry.items && entry.items.length) {
+                const names = entry.items.map((i) => i.name).join(', ');
+                lines.push(`${dateStr.slice(5).replace('-', '/')} (${dow}) ${meal.label}: ${names}`);
+            }
+        });
+    });
+    return lines;
+}
+
+function buildFoodSummaryForTrip(tripId) {
+    const lines = buildFoodSummaryLines(tripId);
+    return lines.length ? `🍳 먹은 메뉴\n${lines.join('\n')}` : '';
+}
+
+function buildHistoryFromTrip(trip) {
+    const foodSummary = buildFoodSummaryForTrip(trip.id);
+    const noteParts = [];
+    if (trip.note) noteParts.push(trip.note);
+    if (foodSummary) noteParts.push(foodSummary);
+    return {
+        id: trip.id, // 같은 id 유지 -> 음식 계획(foodData)이 계속 연결됨
+        campName: trip.title,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        note: noteParts.join('\n\n'),
+    };
+}
+
+function archivePastTrips() {
+    if (!recordsData.upcoming.length) return false;
+    const now = new Date();
+    const stillUpcoming = [];
+    let changed = false;
+
+    recordsData.upcoming.forEach((trip) => {
+        const deadline = checkoutDeadline(trip);
+        if (deadline && now >= deadline) {
+            recordsData.history.push(buildHistoryFromTrip(trip));
+            if (activeFoodTripId === trip.id) activeFoodTripId = null;
+            changed = true;
+        } else {
+            stillUpcoming.push(trip);
+        }
+    });
+
+    if (changed) {
+        recordsData.upcoming = stillUpcoming;
+        saveRecordsData(recordsData);
+    }
+    return changed;
+}
+
+function switchRecordsTab(tab) {
+    activeRecordsTab = tab;
+    document.getElementById('records-tab-upcoming').classList.toggle('active', tab === 'upcoming');
+    document.getElementById('records-tab-history').classList.toggle('active', tab === 'history');
+    document.getElementById('records-upcoming-panel').style.display = tab === 'upcoming' ? '' : 'none';
+    document.getElementById('records-history-panel').style.display = tab === 'history' ? '' : 'none';
+}
+
+// ---- 예정 일정 카드에 표시할, 캠핑 기간 동안의 날짜별 날씨 예보 ----
+const tripForecastCache = new Map();
+const TRIP_FORECAST_TTL_MS = 30 * 60 * 1000; // 예보도 자주 안 바뀌므로 30분 캐시
+
+async function fetchTripForecast(lat, lng, start, end) {
+    const key = `${lat.toFixed(2)},${lng.toFixed(2)},${start},${end}`;
+    const cached = tripForecastCache.get(key);
+    if (cached && (Date.now() - cached.ts) < TRIP_FORECAST_TTL_MS) {
+        return cached.days;
+    }
+    const res = await fetch(`/api/weather-forecast?lat=${lat}&lng=${lng}&start=${start}&end=${end}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '날씨 예보를 불러오지 못했습니다.');
+    const days = data.days || [];
+    tripForecastCache.set(key, { days, ts: Date.now() });
+    return days;
+}
+
+// 위경도가 있는 예정 일정 카드에, 입실~퇴실 기간의 날짜별 날씨를 작은 칩으로 채워 넣는다.
+// 너무 먼 미래라 예보가 없는 경우엔 그냥 조용히 아무것도 표시하지 않는다.
+async function loadTripWeatherIntoCard(rec, rowEl) {
+    if (!rowEl || !rec.lat || !rec.lng || !rec.startDate) return;
+    try {
+        const days = await fetchTripForecast(rec.lat, rec.lng, rec.startDate, rec.endDate || rec.startDate);
+        if (!days.length) return;
+        rowEl.innerHTML = days.map((d) => {
+            const desc = WEATHER_CODE_MAP[d.weatherCode] || '🌡';
+            const md = d.date.slice(5).replace('-', '/');
+            return `<div class="trip-weather-line">${md} ${desc} ${Math.round(d.tempMax)}°/${Math.round(d.tempMin)}°</div>`;
+        }).join('');
+        rowEl.style.display = 'flex';
+    } catch (err) {
+        console.error('일정 날씨 예보를 불러오지 못했습니다:', err);
+    }
+}
+
+function recordDateRangeLabel(rec) {
+    if (!rec.startDate) return '';
+    if (!rec.endDate || rec.endDate === rec.startDate) return `${rec.startDate} (당일)`;
+    const nights = generateDateRange(rec.startDate, rec.endDate).length - 1;
+    return `${rec.startDate} ~ ${rec.endDate} (${nights}박 ${nights + 1}일)`;
+}
+
+function renderRecordsView() {
+    switchRecordsTab(activeRecordsTab);
+
+    const upcomingList = document.getElementById('upcoming-list');
+    upcomingList.innerHTML = '';
+    const sortedUpcoming = [...recordsData.upcoming].sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+    if (sortedUpcoming.length === 0) {
+        upcomingList.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:12px 0;">등록된 예정 일정이 없어요.</div>';
+    }
+    sortedUpcoming.forEach((rec) => {
+        const foodSaved = !!(foodData.trips[rec.id] && foodData.trips[rec.id].saved);
+        const foodLines = foodSaved ? buildFoodSummaryLines(rec.id) : [];
+        const card = document.createElement('div');
+        card.className = 'record-card';
+        card.innerHTML = `
+            <div class="record-title-row">
+                <strong>${rec.title}</strong>
+                <button class="item-del-btn">✕</button>
+            </div>
+            <div class="record-dates">${recordDateRangeLabel(rec)}</div>
+            ${foodSaved ? `
+                <div class="trip-food-summary">
+                    <div class="trip-food-summary-title">🍳 음식 계획 저장됨</div>
+                    ${foodLines.length
+                        ? foodLines.map((l) => `<div class="trip-food-summary-line">${l}</div>`).join('')
+                        : '<div class="trip-food-summary-line">등록된 메뉴가 없어요.</div>'}
+                </div>
+            ` : ''}
+            <div class="trip-weather-row"></div>
+            ${rec.site ? `<a class="record-link" href="${rec.site}" target="_blank" rel="noopener">🔗 사이트 바로가기</a>` : ''}
+            ${rec.note ? `<div class="record-note">${rec.note}</div>` : ''}
+        `;
+        card.querySelector('.item-del-btn').onclick = () => deleteRecord('upcoming', rec.id);
+        upcomingList.appendChild(card);
+        loadTripWeatherIntoCard(rec, card.querySelector('.trip-weather-row'));
+    });
+
+    const historyList = document.getElementById('history-list');
+    historyList.innerHTML = '';
+    const sortedHistory = [...recordsData.history].sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
+    if (sortedHistory.length === 0) {
+        historyList.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:12px 0;">아직 기록된 캠핑이 없어요.</div>';
+    }
+    sortedHistory.forEach((rec) => {
+        const card = document.createElement('div');
+        card.className = 'record-card';
+        card.innerHTML = `
+            <div class="record-title-row">
+                <strong>${rec.campName}</strong>
+                <button class="item-del-btn">✕</button>
+            </div>
+            <div class="record-dates">${recordDateRangeLabel(rec)}</div>
+            ${rec.note ? `<div class="record-note">${rec.note}</div>` : ''}
+        `;
+        card.querySelector('.item-del-btn').onclick = () => deleteRecord('history', rec.id);
+        historyList.appendChild(card);
+    });
+}
+
+// 지도의 캠핑장 시트에서 '일정 추가' 버튼을 눌렀을 때: 캠핑기록 패널을 열고
+// 예정 일정 탭의 입력폼에 캠핑장 이름/주소/사이트 링크/위치를 미리 채워준다. 날짜는 사용자가 직접 골라 저장한다.
+function openScheduleFormForCamp(item) {
+    closeSheet();
+    activeRecordsTab = 'upcoming';
+    switchView('records');
+    hideUpcomingSuggestions();
+    document.getElementById('upcoming-title-input').value = item.name;
+    document.getElementById('upcoming-note-input').value = item.address || '';
+    document.getElementById('upcoming-site-input').value = pickSiteUrl(item) || '';
+    pendingUpcomingLat = item.lat || null;
+    pendingUpcomingLng = item.lng || null;
+    openDatePicker(document.getElementById('upcoming-start-input'));
+}
+
+// 고캠핑 등록 캠핑장은 resveUrl/homepage, 보완 검색(네이버) 캠핑장은 placeUrl을 사이트 링크로 우선 사용한다.
+function pickSiteUrl(item) {
+    if (isReservationWorthyUrl(item.resveUrl)) return item.resveUrl;
+    if (isReservationWorthyUrl(item.homepage)) return item.homepage;
+    if (item.placeUrl) return item.placeUrl;
+    return '';
+}
+
+// ---- 일정 이름 입력 시 지도(고캠핑+네이버 보완검색)에서 캠핑장 자동완성 ----
+let upcomingSuggestTimer = null;
+// 자동완성으로 선택한 캠핑장의 좌표(음식 추천 등에서 재사용). 직접 입력한 경우엔 null.
+let pendingUpcomingLat = null;
+let pendingUpcomingLng = null;
+
+function onUpcomingTitleInput() {
+    pendingUpcomingLat = null;
+    pendingUpcomingLng = null;
+    clearTimeout(upcomingSuggestTimer);
+    const keyword = document.getElementById('upcoming-title-input').value.trim();
+    if (keyword.length < 2) {
+        hideUpcomingSuggestions();
+        return;
+    }
+    upcomingSuggestTimer = setTimeout(async () => {
+        try {
+            const results = await searchCampsByName(keyword);
+            renderUpcomingSuggestions(results.slice(0, 8));
+        } catch (err) {
+            console.error('일정 이름 자동완성 검색 실패:', err);
+        }
+    }, 350);
+}
+
+function renderUpcomingSuggestions(results) {
+    const listEl = document.getElementById('upcoming-title-suggestions');
+    listEl.innerHTML = '';
+    if (!results.length) {
+        listEl.style.display = 'none';
+        return;
+    }
+    results.forEach((camp) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <div class="suggest-name">${camp.name}</div>
+            <div class="suggest-addr">${camp.address}</div>
+        `;
+        // blur보다 먼저 발생하도록 mousedown에서 선택 처리(클릭 직전 목록이 닫히는 것 방지)
+        li.onmousedown = (e) => {
+            e.preventDefault();
+            selectUpcomingSuggestion(camp);
+        };
+        listEl.appendChild(li);
+    });
+    listEl.style.display = 'block';
+}
+
+function selectUpcomingSuggestion(camp) {
+    document.getElementById('upcoming-title-input').value = camp.name;
+    document.getElementById('upcoming-note-input').value = camp.address || '';
+    document.getElementById('upcoming-site-input').value = pickSiteUrl(camp) || '';
+    pendingUpcomingLat = camp.lat || null;
+    pendingUpcomingLng = camp.lng || null;
+    hideUpcomingSuggestions();
+
+    // 선택한 캠핑장 위치로 지도도 함께 이동 (일정 패널은 지도 위에 떠 있으므로 바로 확인 가능)
+    if (map && camp.lat && camp.lng) {
+        map.setCenter(new naver.maps.LatLng(camp.lat, camp.lng));
+        map.setZoom(15);
+    }
+}
+
+function hideUpcomingSuggestions() {
+    const listEl = document.getElementById('upcoming-title-suggestions');
+    if (!listEl) return;
+    listEl.style.display = 'none';
+    listEl.innerHTML = '';
+}
+
+// ---- 지난 기록: 캠핑장 이름 자동완성 (좌표는 저장하지 않음, 지도 이동만) ----
+let historySuggestTimer = null;
+
+function onHistoryCampInput() {
+    clearTimeout(historySuggestTimer);
+    const keyword = document.getElementById('history-camp-input').value.trim();
+    if (keyword.length < 2) {
+        hideHistorySuggestions();
+        return;
+    }
+    historySuggestTimer = setTimeout(async () => {
+        try {
+            const results = await searchCampsByName(keyword);
+            renderHistorySuggestions(results.slice(0, 8));
+        } catch (err) {
+            console.error('지난 기록 이름 자동완성 검색 실패:', err);
+        }
+    }, 350);
+}
+
+function renderHistorySuggestions(results) {
+    const listEl = document.getElementById('history-camp-suggestions');
+    listEl.innerHTML = '';
+    if (!results.length) {
+        listEl.style.display = 'none';
+        return;
+    }
+    results.forEach((camp) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <div class="suggest-name">${camp.name}</div>
+            <div class="suggest-addr">${camp.address}</div>
+        `;
+        li.onmousedown = (e) => {
+            e.preventDefault();
+            selectHistorySuggestion(camp);
+        };
+        listEl.appendChild(li);
+    });
+    listEl.style.display = 'block';
+}
+
+function selectHistorySuggestion(camp) {
+    document.getElementById('history-camp-input').value = camp.name;
+    hideHistorySuggestions();
+    if (map && camp.lat && camp.lng) {
+        map.setCenter(new naver.maps.LatLng(camp.lat, camp.lng));
+        map.setZoom(15);
+    }
+}
+
+function hideHistorySuggestions() {
+    const listEl = document.getElementById('history-camp-suggestions');
+    if (!listEl) return;
+    listEl.style.display = 'none';
+    listEl.innerHTML = '';
+}
+
+document.addEventListener('click', (e) => {
+    const upcomingWrap = document.getElementById('upcoming-title-autocomplete');
+    if (upcomingWrap && !upcomingWrap.contains(e.target)) hideUpcomingSuggestions();
+    const historyWrap = document.getElementById('history-camp-autocomplete');
+    if (historyWrap && !historyWrap.contains(e.target)) hideHistorySuggestions();
+});
+
+function addUpcomingRecord() {
+    const title = document.getElementById('upcoming-title-input').value.trim();
+    const startDate = document.getElementById('upcoming-start-input').value;
+    const endDate = document.getElementById('upcoming-end-input').value;
+    const site = document.getElementById('upcoming-site-input').value.trim();
+    const note = document.getElementById('upcoming-note-input').value.trim();
+    if (!title) { alert('캠핑장/여행 이름을 입력해주세요.'); return; }
+    recordsData.upcoming.push({
+        id: Date.now() + Math.random().toString(16).slice(2),
+        title, startDate, endDate, site, note,
+        lat: pendingUpcomingLat, lng: pendingUpcomingLng,
+    });
+    if (!saveRecordsData(recordsData)) {
+        recordsData.upcoming.pop();
+        return;
+    }
+    // If the selected dates have already passed, show the saved trip in History immediately.
+    const archived = archivePastTrips();
+    if (archived) {
+        activeRecordsTab = 'history';
+        alert('종료일이 지난 일정이라 지난 기록에 저장했습니다.');
+    }
+    document.getElementById('upcoming-title-input').value = '';
+    document.getElementById('upcoming-start-input').value = '';
+    document.getElementById('upcoming-end-input').value = '';
+    document.getElementById('upcoming-site-input').value = '';
+    document.getElementById('upcoming-note-input').value = '';
+    pendingUpcomingLat = null;
+    pendingUpcomingLng = null;
+    hideUpcomingSuggestions();
+    renderRecordsView();
+}
+
+function addHistoryRecord() {
+    const campName = document.getElementById('history-camp-input').value.trim();
+    const startDate = document.getElementById('history-start-input').value;
+    const endDate = document.getElementById('history-end-input').value;
+    const note = document.getElementById('history-note-input').value.trim();
+    if (!campName) { alert('캠핑장 이름을 입력해주세요.'); return; }
+    recordsData.history.push({ id: Date.now() + Math.random().toString(16).slice(2), campName, startDate, endDate, note });
+    saveRecordsData(recordsData);
+    document.getElementById('history-camp-input').value = '';
+    document.getElementById('history-start-input').value = '';
+    document.getElementById('history-end-input').value = '';
+    document.getElementById('history-note-input').value = '';
+    hideHistorySuggestions();
+    renderRecordsView();
+}
+
+function deleteRecord(type, id) {
+    // 저장된 캠핑 기록/일정은 실수로 지우면 되돌릴 수 없으므로, 삭제 전 반드시 확인한다.
+    const rec = (recordsData[type] || []).find((r) => r.id === id);
+    const label = rec && rec.camp ? `'${rec.camp}'` : (type === 'upcoming' ? '이 예정 일정' : '이 캠핑 기록');
+    const hasFoodPlan = type === 'upcoming' && foodData && foodData.trips && foodData.trips[id];
+    let msg = `${label}을(를) 삭제할까요?\n삭제하면 되돌릴 수 없어요.`;
+    if (hasFoodPlan) msg += `\n연결된 음식 계획도 함께 삭제됩니다.`;
+    if (!confirm(msg)) return;
+    recordsData[type] = recordsData[type].filter((r) => r.id !== id);
+    saveRecordsData(recordsData);
+    // 예정 일정을 지우면 그 일정에 연결된 음식 계획도 함께 정리한다.
+    if (type === 'upcoming' && foodData && foodData.trips && foodData.trips[id]) {
+        delete foodData.trips[id];
+        saveFoodData(foodData);
+    }
+    if (type === 'upcoming' && activeFoodTripId === id) {
+        activeFoodTripId = null;
+    }
+    renderRecordsView();
+}
+
+// ============================================================
+// ---- 내 장비 (목록 관리 + 캠핑별 체크리스트) ----
+// ============================================================
+const GEAR_STORAGE_KEY = 'campmap_gear_v1';
+
+function loadGearData() {
+    try {
+        const raw = localStorage.getItem(GEAR_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : {};
+        return { items: parsed.items || [], checklists: parsed.checklists || {} };
+    } catch (e) {
+        return { items: [], checklists: {} };
+    }
+}
+function saveGearData(data, skipSync) {
+    try { localStorage.setItem(GEAR_STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+    if (!skipSync) debouncedSync();
+}
+let gearData = loadGearData();
+let activeChecklistName = null;
+
+wireTextSuggestions(
+    document.getElementById('gear-category-input'),
+    document.getElementById('gear-category-suggestions'),
+    () => gearData.items.map((i) => i.category)
+);
+wireTextSuggestions(
+    document.getElementById('gear-manufacturer-input'),
+    document.getElementById('gear-manufacturer-suggestions'),
+    () => gearData.items.map((i) => i.manufacturer)
+);
+
+let expandedGearCategories = new Set(); // 펼쳐진 종류(화면 상태, 저장 안 함)
+
+function renderGearView() {
+    const listEl = document.getElementById('gear-master-list');
+    listEl.innerHTML = '';
+    if (gearData.items.length === 0) {
+        listEl.innerHTML = '<div style="color:#adb5bd; font-size:13px; padding:12px 0;">등록된 장비가 없어요.</div>';
+    } else {
+        const groups = {};
+        gearData.items.forEach((item) => {
+            const cat = item.category || '미분류';
+            if (!groups[cat]) groups[cat] = [];
+            groups[cat].push(item);
+        });
+
+        Object.keys(groups).sort().forEach((cat) => {
+            const items = groups[cat];
+            const isExpanded = expandedGearCategories.has(cat);
+
+            const groupWrap = document.createElement('div');
+            groupWrap.className = 'gear-category-group';
+
+            const header = document.createElement('button');
+            header.type = 'button';
+            header.className = 'gear-category-header';
+            header.innerHTML = `
+                <span>${cat} <span class="gear-category-count">${items.length}개</span></span>
+                <span class="gear-category-arrow">${isExpanded ? '▲' : '▼'}</span>
+            `;
+            header.onclick = () => {
+                if (expandedGearCategories.has(cat)) expandedGearCategories.delete(cat);
+                else expandedGearCategories.add(cat);
+                renderGearView();
+            };
+            groupWrap.appendChild(header);
+
+            if (isExpanded) {
+                const itemsWrap = document.createElement('div');
+                itemsWrap.className = 'gear-category-items';
+                items.forEach((item) => itemsWrap.appendChild(buildGearItemCard(item)));
+                groupWrap.appendChild(itemsWrap);
+            }
+
+            listEl.appendChild(groupWrap);
+        });
+    }
+
+    // 종류/제조사 자동완성은 wireTextSuggestions가 gearData.items를 그때그때 직접 참조하므로 여기서 따로 갱신할 필요 없다.
+
+    const select = document.getElementById('checklist-select');
+    const names = Object.keys(gearData.checklists);
+    const prevSelected = activeChecklistName;
+    select.innerHTML = '<option value="">체크리스트 선택...</option>' +
+        names.map((n) => `<option value="${n}">${n}</option>`).join('');
+    activeChecklistName = (prevSelected && names.includes(prevSelected)) ? prevSelected : null;
+    select.value = activeChecklistName || '';
+    renderChecklistDetail();
+}
+
+// 장비 한 개의 카드(제조사/이름/가격/수량 스테퍼/삭제)를 만든다. 종류별 목록 펼침에서 재사용.
+function buildGearItemCard(item) {
+    const qty = item.quantity || 1;
+    const card = document.createElement('div');
+    card.className = 'item-card gear-card';
+    let priceLabel = '';
+    if (item.price) {
+        const unit = Number(item.price);
+        priceLabel = qty > 1
+            ? `${unit.toLocaleString('ko-KR')}원 × ${qty} = ${(unit * qty).toLocaleString('ko-KR')}원`
+            : `${unit.toLocaleString('ko-KR')}원`;
+    }
+    card.innerHTML = `
+        <div class="gear-card-info">
+            <div class="gear-card-top">
+                ${item.category ? `<span class="gear-category-tag">${item.category}</span>` : ''}
+                ${item.manufacturer ? `<span class="gear-manufacturer">${item.manufacturer}</span>` : ''}
+            </div>
+            <div class="gear-name">${item.name}</div>
+            ${priceLabel ? `<div class="gear-price">${priceLabel}</div>` : ''}
+            <div class="gear-qty-row">
+                <button type="button" class="gear-qty-btn gear-qty-minus">−</button>
+                <span class="gear-qty-value">${qty}개</span>
+                <button type="button" class="gear-qty-btn gear-qty-plus">+</button>
+            </div>
+        </div>
+        <button class="item-del-btn">✕</button>
+    `;
+    card.querySelector('.gear-qty-minus').onclick = () => changeGearQty(item.id, -1);
+    card.querySelector('.gear-qty-plus').onclick = () => changeGearQty(item.id, 1);
+    card.querySelector('.item-del-btn').onclick = () => deleteGearItem(item.id);
+    return card;
+}
+
+function changeGearQty(id, delta) {
+    const item = gearData.items.find((i) => i.id === id);
+    if (!item) return;
+    const current = item.quantity || 1;
+    item.quantity = Math.max(1, current + delta);
+    saveGearData(gearData);
+    renderGearView();
+}
+
+function addGearItem() {
+    const categoryInput = document.getElementById('gear-category-input');
+    const manufacturerInput = document.getElementById('gear-manufacturer-input');
+    const nameInput = document.getElementById('gear-name-input');
+    const priceInput = document.getElementById('gear-price-input');
+
+    const name = nameInput.value.trim();
+    if (!name) { alert('장비 이름을 입력해주세요.'); return; }
+
+    const category = categoryInput.value.trim();
+    const manufacturer = manufacturerInput.value.trim();
+    const priceDigits = priceInput.value.replace(/[^0-9]/g, '');
+    const price = priceDigits ? Number(priceDigits) : null;
+
+    gearData.items.push({
+        id: Date.now() + Math.random().toString(16).slice(2),
+        category, manufacturer, name, price, quantity: 1,
+    });
+    saveGearData(gearData);
+
+    categoryInput.value = '';
+    manufacturerInput.value = '';
+    nameInput.value = '';
+    priceInput.value = '';
+    renderGearView();
+}
+function deleteGearItem(id) {
+    gearData.items = gearData.items.filter((i) => i.id !== id);
+    saveGearData(gearData);
+    renderGearView();
+}
+
+function createChecklist() {
+    const nameInput = document.getElementById('checklist-name-input');
+    const name = nameInput.value.trim();
+    if (!name) { alert('체크리스트 이름을 입력해주세요.'); return; }
+    if (gearData.items.length === 0) { alert('먼저 장비를 목록에 추가해주세요.'); return; }
+    const checklist = {};
+    gearData.items.forEach((item) => { checklist[item.id] = false; });
+    gearData.checklists[name] = checklist;
+    saveGearData(gearData);
+    nameInput.value = '';
+    activeChecklistName = name;
+    renderGearView();
+}
+
+function renderChecklistDetail() {
+    const select = document.getElementById('checklist-select');
+    activeChecklistName = select.value || null;
+    const progressEl = document.getElementById('checklist-progress');
+    const listEl = document.getElementById('checklist-item-list');
+    listEl.innerHTML = '';
+
+    if (!activeChecklistName || !gearData.checklists[activeChecklistName]) {
+        progressEl.innerText = '';
+        return;
+    }
+    const checklist = gearData.checklists[activeChecklistName];
+    const checkedCount = Object.values(checklist).filter(Boolean).length;
+    const totalCount = Object.keys(checklist).length;
+    progressEl.innerText = `${checkedCount} / ${totalCount} 준비완료`;
+
+    gearData.items
+        .filter((item) => checklist.hasOwnProperty(item.id))
+        .forEach((item) => {
+            const card = document.createElement('div');
+            card.className = 'item-card';
+            const checked = checklist[item.id];
+            const qty = item.quantity || 1;
+            card.innerHTML = `
+                <input type="checkbox" class="item-checkbox" ${checked ? 'checked' : ''}>
+                <span class="item-name ${checked ? 'checked' : ''}">${item.name}${qty > 1 ? ` × ${qty}` : ''}</span>
+            `;
+            card.querySelector('.item-checkbox').onchange = (e) => {
+                gearData.checklists[activeChecklistName][item.id] = e.target.checked;
+                saveGearData(gearData);
+                renderChecklistDetail();
+            };
+            listEl.appendChild(card);
+        });
+}
+
+function deleteCurrentChecklist() {
+    if (!activeChecklistName) return;
+    if (!confirm(`'${activeChecklistName}' 체크리스트를 삭제할까요?`)) return;
+    delete gearData.checklists[activeChecklistName];
+    saveGearData(gearData);
+    activeChecklistName = null;
+    renderGearView();
+}
+
+// ============================================================
+// ---- 여러 기기 동기화 (로그인 없이, 하나의 공유 데이터를 서버에 저장) ----
+// ============================================================
+// 로컬(localStorage)은 오프라인에서도 바로 쓰도록 캐시로 계속 사용하고,
+// 값이 바뀔 때마다 서버(api/sync)에도 저장해 다른 기기에서 같은 데이터를 볼 수 있게 한다.
+let syncTimer = null;
+// Replaced by app-upgrade.js before app startup. Keep edits local if the module fails to load.
+function debouncedSync() { showStatus('저장 기능을 불러오지 못했습니다. 새로고침해 주세요.', true); }
+async function pushStateToServer() {}
+async function initialSync() {}
+
+// 동기화로 데이터가 바뀌었을 수 있으니, 현재 열려있는 패널이 있으면 다시 그려서 반영한다.
+function refreshActiveView() {
+    const active = ['food', 'records', 'gear'].find((v) => {
+        const panel = document.getElementById(`view-${v}`);
+        return panel && panel.classList.contains('active');
+    });
+    if (active === 'food') renderFoodView();
+    else if (active === 'records') renderRecordsView();
+    else if (active === 'gear') renderGearView();
+}
+
+// Startup and sync are initialized by app-upgrade.js, independently of the map SDK.

@@ -730,3 +730,57 @@ const duoMapObserver=new ResizeObserver(()=>{
   });
 });
 duoMapObserver.observe($('#map'));
+
+// ---------- 다음 캠핑 카드 (지도 화면) ----------
+// 가장 가까운 예정 일정을 D-day·날씨·준비 진행률과 함께 지도 위에 띄운다. 누르면 '캠핑 준비'로 간다.
+const nextCampCard=element('button','cm-next-camp');nextCampCard.type='button';nextCampCard.hidden=true;
+document.body.append(nextCampCard);
+function daysUntil(dateStr){
+  if(!dateStr)return null;
+  const today=new Date(nowDate()+'T00:00:00');const d=new Date(dateStr+'T00:00:00');
+  return Math.round((d-today)/86400000);
+}
+function nextUpcomingTrip(){
+  const today=nowDate();
+  return [...(recordsData.upcoming||[])]
+    .filter(t=>!t.endDate||t.endDate>=today||(!t.endDate&&(t.startDate||'')>=today))
+    .sort((a,b)=>(a.startDate||'9999').localeCompare(b.startDate||'9999'))[0]||null;
+}
+let nextCampWeatherKey='';
+function renderNextCampCard(){
+  const trip=nextUpcomingTrip();
+  if(!trip){nextCampCard.hidden=true;document.body.classList.remove('has-next-camp');return;}
+  const dd=daysUntil(trip.startDate);
+  const ddLabel=dd==null?'날짜 미정':dd>0?'D-'+dd:dd===0?'오늘 출발':'캠핑 중';
+  const prep=tripPrep(trip.id);
+  const gear=Object.values(prep.gear||{});const packed=gear.filter(v=>v.packed).length;
+  const needs=(prep.shopping||[]).filter(x=>!x.owned);const bought=needs.filter(x=>x.bought).length;
+  const total=gear.length+needs.length,done=packed+bought;
+  const pct=total?Math.round(done/total*100):0;
+  nextCampCard.innerHTML='<span class="cm-next-dday">'+esc(ddLabel)+'</span>'
+    +'<span class="cm-next-body"><strong>'+esc(trip.title||trip.campName||'다음 캠핑')+'</strong>'
+    +'<small>'+esc(recordDateRangeLabel(trip))+'<span class="cm-next-weather"></span></small>'
+    +'<span class="cm-next-progress" aria-label="준비 '+pct+'%"><i style="width:'+pct+'%"></i></span>'
+    +'<small class="cm-next-meta">'+(total?'준비 '+done+'/'+total+' · 장비 '+packed+'/'+gear.length+' · 장보기 '+bought+'/'+needs.length:'준비할 장비·장보기를 정해 보세요')+'</small></span>'
+    +'<span class="cm-next-chevron" aria-hidden="true">›</span>';
+  nextCampCard.setAttribute('aria-label','다음 캠핑 '+(trip.title||'')+' '+ddLabel+', 눌러서 준비 화면 열기');
+  nextCampCard.hidden=false;document.body.classList.add('has-next-camp');
+  nextCampCard.onclick=()=>{selectedPrepTrip=trip.id;switchView('prep');};
+  // 예보는 출발 10일 이내이고 위치가 있을 때만
+  const key=[trip.id,trip.startDate,trip.lat,trip.lng].join('|');
+  if(trip.lat&&trip.lng&&dd!=null&&dd<=10&&key!==nextCampWeatherKey){
+    nextCampWeatherKey=key;
+    fetchTripForecast(trip.lat,trip.lng,trip.startDate,trip.endDate||trip.startDate).then(days=>{
+      const d=days&&days[0];const node=nextCampCard.querySelector('.cm-next-weather');if(!d||!node)return;
+      node.textContent=' · '+(WEATHER_CODE_MAP[d.weatherCode]||'날씨')+' '+d.tempMin+'~'+d.tempMax+'°';
+    }).catch(()=>{nextCampWeatherKey='';});
+  }
+}
+const refreshAllWithCard=refreshAll;
+refreshAll=function(){refreshAllWithCard();renderNextCampCard();};
+const switchWithCard=switchView;
+switchView=function(view){switchWithCard(view);if(view==='map')renderNextCampCard();};
+window.addEventListener('focus',renderNextCampCard);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)renderNextCampCard();});
+renderNextCampCard();
+setInterval(renderNextCampCard,60*1000);
